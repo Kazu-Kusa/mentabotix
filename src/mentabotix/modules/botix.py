@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple, TypeAlias, Self, Unpack, Literal
+from typing import Tuple, TypeAlias, Self, Unpack, Literal, Any, Callable, Optional
 
 import numpy as np
 
@@ -9,11 +9,29 @@ IndividualPattern: TypeAlias = Tuple[int, int, int, int]
 
 
 class MovingState:
+    """
+    Describes the movement state of the bot.
+    Include:
+    - halt: make a stop state,all wheels stop moving
+    - straight: make a straight moving state,all wheels move in the same direction,same speed
+    - turn: make a turning state,left and right wheels turn in in different direction,same speed
+    - differential: make a differential state,all wheels move in the same direction,different speed
+    - drift: make a drift state,all wheels except for a specific one drift in the same direction, specific speed
+
+    """
 
     @dataclass
     class Config:
+        """
+        Configuration for the MovingState class.
+        Args:
+            track_width(int):The width of the track(AKA the distance between the wheels with a same axis). dimensionless number
+            diagonal_multiplier(float):The multiplier for the diagonal speeds. dimensionless number.All designed for the drift movement.
+        """
+
         track_width: int = 100
         diagonal_multiplier: float = 1.53
+        # TODO: remove the dimensionless feature
 
     def __init__(self, *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern]):
         """
@@ -42,12 +60,23 @@ class MovingState:
                 raise ValueError(f"Invalid Speeds. Must be one of [(int,),(int,int),(int,int,int,int)], got {types}")
 
     @classmethod
+    def halt(cls) -> Self:
+        """
+        Create a new instance of the class with a speed of 0, effectively halting the movement.
+
+        Returns:
+            Self: A new instance of the class with a speed of 0.
+        """
+        return cls(0)
+
+    @classmethod
     def straight(cls, speed: int) -> Self:
         """
         Create a new instance of the class with the specified speed.
+        Lets the bot drive straight with the specified speed.
 
         Args:
-            speed (int): The speed value to be used for the new instance.
+            speed (int): The speed value to be used for the new instance. Positive for forward and negative for backward.
 
         Returns:
             Self: A new instance of the class with the specified speed.
@@ -58,7 +87,12 @@ class MovingState:
     def differential(cls, direction: Literal["l", "r"], radius: float, outer_speed: int) -> Self:
         """
         Create a new instance of the class with the specified differential movement.
+        Let the bot make a differential movement with the specified radius and speed.
 
+        Note:
+            The outer speed is the speed of the outer wheel.
+            The unit of the radius is a dimensionless number, not CM, not MM, etc.
+            The inner speed is calculated from the outer speed and the radius and the track_width.
         Args:
             direction (Literal["l", "r"]): The direction of the movement. Must be one of "l" or "r".
             radius (float): The radius of the movement.
@@ -69,6 +103,7 @@ class MovingState:
 
         Raises:
             ValueError: If the direction is not one of "l" or "r".
+
         """
         inner_speed = int(radius / (radius + cls.Config.track_width) * outer_speed)
 
@@ -84,6 +119,7 @@ class MovingState:
     def turn(cls, direction: Literal["l", "r"], speed: int) -> Self:
         """
         Create a new instance of the class with the specified turn direction and speed.
+        Lets the bot make a turn with the specified direction and speed in place.
 
         Args:
             direction (Literal["l", "r"]): The direction of the turn. Must be one of "l" or "r".
@@ -107,6 +143,13 @@ class MovingState:
     def drift(cls, fixed_axis: Literal["fl", "rl", "rr", "fr"], speed: int) -> Self:
         """
         Create a new instance of the class with the specified drift direction and speed.
+        Lets the bot make a drift with the specified direction and speed in place.
+
+        Note:
+            This movement is achieved by making a wheel fixed, while the others move with the specified speed.
+
+            The drift movement is affected by the Config.diagonal_multiplier.
+
 
         Args:
             fixed_axis (Literal["fl", "rl", "rr", "fr"]): The direction of the drift. Must be one of "fl", "rl", "rr", or "fr".
