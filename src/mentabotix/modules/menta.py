@@ -14,7 +14,7 @@ from typing import (
     SupportsFloat,
 )
 
-from .exceptions import BadSignatureError, RequirementError, SamplerTypeError
+from .exceptions import BadSignatureError, RequirementError
 from .logger import _logger
 
 SensorData = float | int
@@ -117,13 +117,17 @@ class Menta:
         update_funcs: List[UpdaterClosure] = []
 
         for usage in usages:
+            _logger.debug(
+                f"Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
+            )
+            sampler = self.samplers[usage.used_sampler_index]
             match self.sampler_types[usage.used_sampler_index]:
                 case SamplerType.SEQ_SAMPLER:
-                    update_funcs.append(self.resolve_seq_sampler(usage))
+                    update_funcs.append(self.resolve_seq_sampler(sampler, usage.required_data_indexes))
                 case SamplerType.IDX_SAMPLER:
-                    update_funcs.append(self.resolve_idx_sampler(usage))
+                    update_funcs.append(self.resolve_idx_sampler(sampler, usage.required_data_indexes))
                 case SamplerType.DRC_SAMPLER:
-                    update_funcs.append(self.resolve_drc_sampler(usage))
+                    update_funcs.append(self.resolve_drc_sampler(sampler, usage.required_data_indexes))
                 case _:
                     raise RuntimeError(f"Unsupported sampler type: {self.sampler_types[usage.used_sampler_index]}")
 
@@ -143,151 +147,118 @@ class Menta:
 
                 return _updater
 
-    def resolve_seq_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
+    @staticmethod
+    def resolve_seq_sampler(sampler: SequenceSampler, required_data_indexes: Sequence[int]) -> UpdaterClosure:
         """
-        Resolves the sampler based on the given sampler usage.
+        Resolves the sampler based on the given sequence sampler and required data indexes.
 
         Args:
-            usage (SamplerUsage): The sampler usage object that contains the information about the used sampler and the required data indexes.
+            sampler (SequenceSampler): The sequence sampler to resolve.
+            required_data_indexes (Sequence[int]): The required data indexes.
 
         Returns:
             UpdaterClosure: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
 
         Raises:
-            SamplerTypeError: If the sampler at the specified index is not an indexed sampler or if the sampler does not require any data.
+            None
 
         Examples:
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[])
-            sampler = _resolve_seq_sampler(usage)
-            data = sampler()  # Returns a tuple of all SensorData objects
+            sampler = SequenceSampler()
+            required_data_indexes = []
+            resolved_sampler = resolve_seq_sampler(sampler, required_data_indexes)
+            data = resolved_sampler()  # Returns a tuple of all SensorData objects
 
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0])
-            sampler = _resolve_seq_sampler(usage)
-            data = sampler()  # Returns the SensorData object at index 0
+            sampler = SequenceSampler()
+            required_data_indexes = [0]
+            resolved_sampler = resolve_seq_sampler(sampler, required_data_indexes)
+            data = resolved_sampler()  # Returns the SensorData object at index 0
 
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 1, 2])
-            sampler = _resolve_seq_sampler(usage)
-            data = sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
+            sampler = SequenceSampler()
+            required_data_indexes = [0, 1, 2]
+            resolved_sampler = resolve_seq_sampler(sampler, required_data_indexes)
+            data = resolved_sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
         """
-        _logger.debug(
-            f"make idx_sampler|Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
-        )
-
-        if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.SEQ_SAMPLER:
-            raise SamplerTypeError(
-                f"Sampler at index {usage.used_sampler_index} is not a sequence sampler "
-                f"but {self.sampler_types[usage.used_sampler_index]}"
-            )
-        sampler: SequenceSampler = self.samplers[usage.used_sampler_index]
-        match len(usage.required_data_indexes):
+        match len(required_data_indexes):
             case 0:
                 # 0 means require all data
                 return sampler  # Callable[[],SensorDataSequence]
             case 1:
                 # 1 means require a specific data
-                unique_index = usage.required_data_indexes[0]
+                unique_index = required_data_indexes[0]
                 return lambda: sampler()[unique_index]  # Callable[[], SensorData]
             case _:
                 # >1 means require multiple data
-                required_indexes = usage.required_data_indexes
+                required_indexes = required_data_indexes
                 return lambda: tuple(sampler()[i] for i in required_indexes)  # Callable[[],SensorDataSequence]
 
-    def resolve_idx_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
+    @staticmethod
+    def resolve_idx_sampler(sampler: IndexedSampler, required_data_indexes: Sequence[int]) -> UpdaterClosure:
         """
         Resolves the indexed sampler based on the given sampler usage.
 
         Args:
-            usage (SamplerUsage): The sampler usage object that contains the information about the used sampler and the required data indexes.
+            sampler (IndexedSampler): The indexed sampler to resolve.
+            required_data_indexes (Sequence[int]): The required data indexes.
 
         Returns:
             UpdaterClosure: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
 
         Raises:
-            SamplerTypeError: If the sampler at the specified index is not an indexed sampler or if the sampler does not require any data.
+            RequirementError: If no required data indexes are specified.
 
         Examples:
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[])
-            sampler = _resolve_idx_sampler(usage)  # Raises ValueError
+            sampler = IndexedSampler()
+            required_data_indexes = []
+            resolved_sampler = resolve_idx_sampler(sampler, required_data_indexes)  # Raises RequirementError
 
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0])
-            sampler = _resolve_idx_sampler(usage)
-            data = sampler()  # Returns the SensorData object at index 0
+            sampler = IndexedSampler()
+            required_data_indexes = [0]
+            resolved_sampler = resolve_idx_sampler(sampler, required_data_indexes)
+            data = resolved_sampler()  # Returns the SensorData object at index 0
 
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 1, 2])
-            sampler = _resolve_idx_sampler(usage)
-            data = sampler()  # Returns a tuple of the SensorData objects at indexes 0, 1, and 2
+            sampler = IndexedSampler()
+            required_data_indexes = [0, 1, 2]
+            resolved_sampler = resolve_idx_sampler(sampler, required_data_indexes)
+            data = resolved_sampler()  # Returns a tuple of the SensorData objects at indexes 0, 1, and 2
         """
-        _logger.debug(
-            f"make idx_sampler|Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
-        )
 
-        if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.IDX_SAMPLER:
-            raise SamplerTypeError(
-                f"Sampler at index {usage.used_sampler_index} is not an indexed sampler "
-                f"but {self.sampler_types[usage.used_sampler_index]}"
-            )
-        sampler: IndexedSampler = self.samplers[usage.used_sampler_index]
-        match len(usage.required_data_indexes):
+        match len(required_data_indexes):
             case 0:
                 raise RequirementError("Must specify at least one required data index")
             case 1:
                 # 1 means require a specific data
-                unique_index = usage.required_data_indexes[0]
+                unique_index = required_data_indexes[0]
                 return lambda: sampler(unique_index)  # Callable[[], SensorData]
             case _:
                 # >1 means require multiple data
-                required_indexes = usage.required_data_indexes
+                required_indexes = required_data_indexes
                 return lambda: tuple(sampler(ri) for ri in required_indexes)  # Callable[[], SensorDataSequence]
 
-    def resolve_drc_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
+    @staticmethod
+    def resolve_drc_sampler(sampler: DirectSampler, required_data_indexes: Sequence[int]) -> UpdaterClosure:
         """
-        Resolves the direct sampler based on the given sampler usage.
+        Resolves the direct sampler based on the given direct sampler and required data indexes.
 
         Args:
-            usage (SamplerUsage): The sampler usage object that contains the information about the used sampler and the required data indexes.
+            sampler (DirectSampler): The direct sampler to resolve.
+            required_data_indexes (Sequence[int]): The required data indexes.
 
         Returns:
-            UpdaterClosure: A callable that returns a SensorData object or a tuple of SensorData objects based on the number of required data indexes.
-
-        Raises:
-            SamplerTypeError: If the sampler at the specified index is not a direct sampler.
-
-        Examples:
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[])
-            sampler = _resolve_drc_sampler(usage)
-            data = sampler()  # Returns a SensorData object
-
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0])
-            sampler = _resolve_drc_sampler(usage)
-            data = sampler()  # Returns a SensorData object at index 0
-
-            usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 1, 2])
-            sampler = _resolve_drc_sampler(usage)
-            data = sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
+            UpdaterClosure: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
         """
-        _logger.debug(
-            f"make idx_sampler|Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
-        )
 
-        if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.DRC_SAMPLER:
-            raise SamplerTypeError(
-                f"Sampler at index {usage.used_sampler_index} is not an indexed sampler "
-                f"but {self.sampler_types[usage.used_sampler_index]}"
-            )
-        sampler: DirectSampler = self.samplers[usage.used_sampler_index]
-        match len(usage.required_data_indexes):
+        match len(required_data_indexes):
             case 0:
                 return sampler  # Callable[[], SensorData]
             case 1:
                 # 1 means require a specific data
-                unique_index = usage.required_data_indexes[0]
+                unique_index = required_data_indexes[0]
                 return lambda: (sampler() << unique_index) & 1
             case _:
                 # >1 means require multiple data
-                required_indexes = usage.required_data_indexes
 
                 def _fun() -> SensorDataSequence:
                     temp_seq = sampler()
-                    return tuple(temp_seq << ri for ri in required_indexes)
+                    return tuple(temp_seq << ri for ri in required_data_indexes)
 
                 return _fun

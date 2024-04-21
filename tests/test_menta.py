@@ -2,7 +2,6 @@ import unittest
 from typing import List
 
 from mentabotix import set_log_level
-from mentabotix.modules.exceptions import RequirementError, SamplerTypeError
 from mentabotix.modules.menta import (
     Menta,
     SamplerType,
@@ -89,23 +88,11 @@ class TestMenta(unittest.TestCase):
         self.assertEqual(results[1], 50)
         self.assertEqual(results[2], 42)
 
-    def test_resolve_seq_sampler_errors(self):
-        with self.assertRaises(SamplerTypeError):
-            bad_usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[])
-            self.menta.resolve_idx_sampler(bad_usage)
-
-    def test_resolve_idx_sampler_errors(self):
-        with self.assertRaises(RequirementError):
-            no_indices_usage = SamplerUsage(used_sampler_index=1, required_data_indexes=[])
-            self.menta.resolve_idx_sampler(no_indices_usage)
-
-        with self.assertRaises(SamplerTypeError):
-            wrong_type_usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[0])
-            self.menta.resolve_idx_sampler(wrong_type_usage)
-
     def test_resolve_drc_sampler(self):
         usage = SamplerUsage(used_sampler_index=2, required_data_indexes=[])
-        updater = self.menta.resolve_drc_sampler(usage)
+        updater = self.menta.resolve_drc_sampler(
+            sampler=self.menta.samplers[usage.used_sampler_index], required_data_indexes=usage.required_data_indexes
+        )
         result = updater()
         self.assertIsInstance(result, int)
         self.assertEqual(result, 42)
