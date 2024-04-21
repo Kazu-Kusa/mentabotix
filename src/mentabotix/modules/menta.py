@@ -16,6 +16,7 @@ from typing import (
 )
 
 from .exceptions import BadSignatureError, RequirementError, SamplerTypeError
+from .logger import _logger
 
 SensorData = TypeVar("SensorData", float, int)
 # basically, no restrictions, support py objects or ctypes._CData variants
@@ -108,29 +109,42 @@ class Menta:
             RuntimeError: If an unsupported sampler type is encountered.
         """
         self.update_sampler_types()
-        if len(usages) != len(self.samplers):
+        if len(self.sampler_types) != len(self.samplers):
             raise ValueError(
                 f"Number of sampler usages ({len(usages)}) does not match number of samplers ({len(self.samplers)}), have you used the update_sampler_types() method?"
             )
+        if len(usages) == 0:
+            raise RequirementError("Can't resolve the empty Usage List")
         update_funcs: List[UpdaterClosure] = []
 
         for usage in usages:
             match self.sampler_types[usage.used_sampler_index]:
                 case SamplerType.SEQ_SAMPLER:
-                    update_funcs.append(self._resolve_seq_sampler(usage))
+                    update_funcs.append(self.resolve_seq_sampler(usage))
                 case SamplerType.IDX_SAMPLER:
-                    update_funcs.append(self._resolve_idx_sampler(usage))
+                    update_funcs.append(self.resolve_idx_sampler(usage))
                 case SamplerType.DRC_SAMPLER:
-                    update_funcs.append(self._resolve_drc_sampler(usage))
+                    update_funcs.append(self.resolve_drc_sampler(usage))
                 case _:
                     raise RuntimeError(f"Unsupported sampler type: {self.sampler_types[usage.used_sampler_index]}")
 
-        def _updater() -> Tuple:
-            return tuple(update_func() for update_func in update_funcs)
+        match update_funcs:
+            case [func]:
+                return func
+            case [func_1, func_2]:
+                return lambda: (func_1(), func_2())
+            case [func_1, func_2, func_3]:
+                return lambda: (func_1(), func_2(), func_3())
+            case [func_1, func_2, func_3, func_4]:
+                return lambda: (func_1(), func_2(), func_3(), func_4())
+            case _:
 
-        return _updater
+                def _updater() -> Tuple:
+                    return tuple(update_func() for update_func in update_funcs)
 
-    def _resolve_seq_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
+                return _updater
+
+    def resolve_seq_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
         """
         Resolves the sampler based on the given sampler usage.
 
@@ -156,6 +170,7 @@ class Menta:
             sampler = _resolve_seq_sampler(usage)
             data = sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
         """
+        _logger.debug(f"make idx_sampler\nusage: {usage}\nsampler_types: {self.sampler_types}")
 
         if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.SEQ_SAMPLER:
             raise SamplerTypeError(
@@ -176,7 +191,7 @@ class Menta:
                 required_indexes = usage.required_data_indexes
                 return lambda: tuple(sampler()[i] for i in required_indexes)  # Callable[[],SensorDataSequence]
 
-    def _resolve_idx_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
+    def resolve_idx_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
         """
         Resolves the indexed sampler based on the given sampler usage.
 
@@ -201,6 +216,7 @@ class Menta:
             sampler = _resolve_idx_sampler(usage)
             data = sampler()  # Returns a tuple of the SensorData objects at indexes 0, 1, and 2
         """
+        _logger.debug(f"make idx_sampler\nusage: {usage}\nsampler_types: {self.sampler_types}")
         if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.IDX_SAMPLER:
             raise SamplerTypeError(
                 f"Sampler at index {usage.used_sampler_index} is not an indexed sampler "
@@ -219,7 +235,7 @@ class Menta:
                 required_indexes = usage.required_data_indexes
                 return lambda: tuple(sampler(ri) for ri in required_indexes)  # Callable[[], SensorDataSequence]
 
-    def _resolve_drc_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
+    def resolve_drc_sampler(self, usage: SamplerUsage) -> UpdaterClosure:
         """
         Resolves the direct sampler based on the given sampler usage.
 
@@ -245,6 +261,8 @@ class Menta:
             sampler = _resolve_drc_sampler(usage)
             data = sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
         """
+        _logger.debug(f"make idx_sampler\nusage: {usage}\nsampler_types: {self.sampler_types}")
+
         if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.DRC_SAMPLER:
             raise SamplerTypeError(
                 f"Sampler at index {usage.used_sampler_index} is not an indexed sampler "
