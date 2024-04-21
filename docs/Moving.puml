@@ -1,0 +1,24 @@
+@startuml
+'https://plantuml.com/state-diagram
+
+scale 350 width
+
+state InitState {
+
+}
+
+state Onstage {
+    InitState -->Onstage: Successfully get on the stage
+    Onstage --> EdgeReact
+    EdgeReact --> SurroundingReact
+    SurroundingReact --> NormalReact
+}
+state OffStage {
+    Onstage --> OffStage: Fall off the stage
+    OffStage --> FenceReact
+    FenceReact -->Dash
+}
+Dash-->Onstage
+
+
+@enduml
