@@ -10,7 +10,6 @@ from typing import (
     NamedTuple,
     Union,
     Self,
-    TypeVar,
     SupportsInt,
     SupportsFloat,
 )
@@ -18,7 +17,7 @@ from typing import (
 from .exceptions import BadSignatureError, RequirementError, SamplerTypeError
 from .logger import _logger
 
-SensorData = TypeVar("SensorData", float, int)
+SensorData = float | int
 # basically, no restrictions, support py objects or ctypes._CData variants
 SensorDataSequence: TypeAlias = Sequence[SensorData]
 UpdaterClosure = Callable[[], SensorDataSequence] | Callable[[], SensorData]
@@ -152,10 +151,10 @@ class Menta:
             usage (SamplerUsage): The sampler usage object that contains the information about the used sampler and the required data indexes.
 
         Returns:
-            Callable[[], Tuple[SensorData, ...]] | Callable[[], SensorData]: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
+            UpdaterClosure: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
 
         Raises:
-            None
+            SamplerTypeError: If the sampler at the specified index is not an indexed sampler or if the sampler does not require any data.
 
         Examples:
             usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[])
@@ -170,7 +169,9 @@ class Menta:
             sampler = _resolve_seq_sampler(usage)
             data = sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
         """
-        _logger.debug(f"make idx_sampler\nusage: {usage}\nsampler_types: {self.sampler_types}")
+        _logger.debug(
+            f"make idx_sampler|Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
+        )
 
         if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.SEQ_SAMPLER:
             raise SamplerTypeError(
@@ -199,10 +200,10 @@ class Menta:
             usage (SamplerUsage): The sampler usage object that contains the information about the used sampler and the required data indexes.
 
         Returns:
-            Callable[[], Tuple[SensorData, ...]] | Callable[[], SensorData]: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
+            UpdaterClosure: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
 
         Raises:
-            ValueError: If the sampler at the specified index is not an indexed sampler or if the sampler does not require any data.
+            SamplerTypeError: If the sampler at the specified index is not an indexed sampler or if the sampler does not require any data.
 
         Examples:
             usage = SamplerUsage(used_sampler_index=0, required_data_indexes=[])
@@ -216,7 +217,10 @@ class Menta:
             sampler = _resolve_idx_sampler(usage)
             data = sampler()  # Returns a tuple of the SensorData objects at indexes 0, 1, and 2
         """
-        _logger.debug(f"make idx_sampler\nusage: {usage}\nsampler_types: {self.sampler_types}")
+        _logger.debug(
+            f"make idx_sampler|Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
+        )
+
         if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.IDX_SAMPLER:
             raise SamplerTypeError(
                 f"Sampler at index {usage.used_sampler_index} is not an indexed sampler "
@@ -261,7 +265,9 @@ class Menta:
             sampler = _resolve_drc_sampler(usage)
             data = sampler()  # Returns a tuple of SensorData objects at indexes 0, 1, and 2
         """
-        _logger.debug(f"make idx_sampler\nusage: {usage}\nsampler_types: {self.sampler_types}")
+        _logger.debug(
+            f"make idx_sampler|Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
+        )
 
         if self.update_sampler_types().sampler_types[usage.used_sampler_index] != SamplerType.DRC_SAMPLER:
             raise SamplerTypeError(
