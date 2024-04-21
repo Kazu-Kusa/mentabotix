@@ -1,11 +1,28 @@
 from dataclasses import dataclass
-from typing import Tuple, TypeAlias, Self, Unpack, Literal, Any, Callable, Optional
+from inspect import signature, Signature
+from typing import (
+    Tuple,
+    TypeAlias,
+    Self,
+    Unpack,
+    Literal,
+    Any,
+    Callable,
+    Iterable,
+    Hashable,
+    TypeVar,
+    Dict,
+    Optional,
+    List,
+)
 
 import numpy as np
+from bdmc import CloseLoopController
 
 FullPattern: TypeAlias = Tuple[int]
 LRPattern: TypeAlias = Tuple[int, int]
 IndividualPattern: TypeAlias = Tuple[int, int, int, int]
+KT = TypeVar("KT", bound=Hashable)
 
 
 class MovingState:
@@ -200,6 +217,131 @@ class MovingState:
             Self: A new `MovingState` object with the same speeds as the current object.
         """
         return MovingState(self._speeds)
+
+    def __hash__(self) -> int:
+        return hash(tuple(self._speeds))
+
+    def __eq__(self, other: Self) -> bool:
+        return tuple(self._speeds) == tuple(other._speeds)
+
+
+class MovingTransform:
+    """
+    A class that represents a moving transform.
+    A moving transform is a transition between two states in a state machine.
+    Features multiple branches and a breaker function to determine if the transition should be broken.
+    """
+
+    def __init__(
+        self,
+        duration: float,
+        breaker: Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]] = None,
+        from_states: Optional[Iterable[MovingState]] = None,
+        to_states: Optional[Iterable[MovingState]] = None,
+        match_cases: Optional[Dict[KT, MovingState]] = None,
+    ):
+        """
+        Initializes a new instance of the MovingTransform class.
+
+        Args:
+            duration (float): The duration of the transition.
+            breaker (Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]]): A function that determines if the transition should be broken.
+            from_states (Optional[Iterable[MovingState]]): The initial state of the transition.
+            to_states (Optional[Iterable[MovingState]]): The final state of the transition.
+            match_cases (Optional[Dict[KT, MovingState]]): A dictionary of branch rules for the transition.
+
+        Raises:
+            ValueError: If the duration is not positive or if the breaker function does not have an annotated return type.
+
+        Returns:
+            None
+        """
+        if duration <= 0:
+            raise ValueError(f"Duration must be positive, got {duration}")
+        if breaker is not None and signature(breaker).return_annotation == Signature.empty:
+            raise ValueError(f"Breaker {breaker} must have annotated return type!")
+
+        self.duration: float = duration
+        self.breaker: Optional[Callable[[], Any]] = breaker
+        self.to_states: List[MovingState] = list(to_states) if to_states is not None else []
+        self.from_states: List[MovingState] = list(from_states) if from_states is not None else []
+        self.match_cases: Dict[KT, MovingState] = match_cases or {}
+
+    def add_from_state(self, state: MovingState) -> Self:
+        """
+        Adds a `MovingState` object to the `from_state` list.
+
+        Args:
+            state (MovingState): The `MovingState` object to be added.
+
+        Returns:
+            Self: The current instance of the class.
+        """
+        self.from_states.append(state)
+        return self
+
+    def add_to_state(self, state: MovingState) -> Self:
+        """
+        Adds a `MovingState` object to the `to_state` list.
+
+        Args:
+            state (MovingState): The `MovingState` object to be added.
+
+        Returns:
+            Self: The current instance of the class.
+        """
+        self.to_states.append(state)
+        return self
+
+    def add_match_case(self, key: KT, state: MovingState) -> Self:
+        """
+        Adds a rule to the `rules` dictionary with the given `key` and `state`.
+
+        Args:
+            key (KT): The key for the rule.
+            state (MovingState): The state for the rule.
+
+        Returns:
+            Self: The current instance of the class.
+        """
+        self.match_cases[key] = state
+        return self
+
+
+TokenPool: TypeAlias = List[MovingState | MovingTransform]
+
+
+class Complier:
+
+    def __init__(
+        self, controller: CloseLoopController, token_pool: Optional[List[MovingState | MovingTransform]] = None
+    ):
+        self.controller: CloseLoopController = controller
+        self.token_pool: TokenPool = token_pool or []
+
+    def resolve_confilict(self, token_pool: TokenPool):
+        states = []
+        transforms = []
+        for token in token_pool:
+            if isinstance(token, MovingState):
+                states.append(token)
+            elif isinstance(token, MovingTransform):
+                transforms.append(token)
+            else:
+                raise ValueError("Token must be either a MovingState or MovingTransform")
+
+    def compile(self) -> Callable:
+        """
+
+        Returns:
+
+        """
+
+        def _func():
+
+            pass
+
+        return _func
 
 
 if __name__ == "__main__":
