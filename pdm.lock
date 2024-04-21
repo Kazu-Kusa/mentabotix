@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:45dee83fa20ff6be368e2299e0deb07f29d43200b3d96d65d97a07b1408c9658"
+content_hash = "sha256:a5e9c52d8e353e9d0c9f8bee1e43983e724284978cc500e41bcd37e404730bc6"
 
 [[package]]
 name = "annotated-types"
@@ -257,16 +257,17 @@ files = [
 
 [[package]]
 name = "pyuptech"
-version = "0.1.2"
+version = "0.1.4a1"
 requires_python = ">=3.11"
 summary = "A Python wrapper for the uptech binary lib"
 groups = ["default"]
 dependencies = [
     "coloredlogs>=15.0.1",
+    "terminaltables>=3.1.10",
 ]
 files = [
-    {file = "pyuptech-0.1.2-py3-none-any.whl", hash = "sha256:cbe8c295d7d65e0873a55705733f002f47e280b525c57f6caa15bcfc6e40db0b"},
-    {file = "pyuptech-0.1.2.tar.gz", hash = "sha256:ea744d0f175cf1fadb9da31ac97271ef15a701733b839deb3931031fae7a9496"},
+    {file = "pyuptech-0.1.4a1-py3-none-any.whl", hash = "sha256:0541b6d93f850e197877de3fd7d5a3720ac6560c73201086ac3305e1a93cff47"},
+    {file = "pyuptech-0.1.4a1.tar.gz", hash = "sha256:b8d970d2bfd3f2afbf86ba38a544c714c2e0f09e809f1f2009370dca792d688b"},
 ]
 
 [[package]]
@@ -292,6 +293,17 @@ files = [
     {file = "PyYAML-6.0.1-cp312-cp312-win32.whl", hash = "sha256:d483d2cdf104e7c9fa60c544d92981f12ad66a457afae824d146093b8c294c54"},
     {file = "PyYAML-6.0.1-cp312-cp312-win_amd64.whl", hash = "sha256:0d3304d8c0adc42be59c5f8a4d9e3d7379e6955ad754aa9d6ab7a398b59dd1df"},
     {file = "PyYAML-6.0.1.tar.gz", hash = "sha256:bfdf460b1736c775f2ba9f6a92bca30bc2095067b8a9d77876d1fad6cc3b4a43"},
+]
+
+[[package]]
+name = "terminaltables"
+version = "3.1.10"
+requires_python = ">=2.6"
+summary = "Generate simple tables in terminals from a nested list of strings."
+groups = ["default"]
+files = [
+    {file = "terminaltables-3.1.10-py2.py3-none-any.whl", hash = "sha256:e4fdc4179c9e4aab5f674d80f09d76fa436b96fdc698a8505e0a36bf0804a874"},
+    {file = "terminaltables-3.1.10.tar.gz", hash = "sha256:ba6eca5cb5ba02bba4c9f4f985af80c54ec3dccf94cfcd190154386255e47543"},
 ]
 
 [[package]]
