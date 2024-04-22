@@ -121,7 +121,8 @@ class Menta:
                 f"Sampler_type: {self.sampler_types[usage.used_sampler_index]}|Required: {usage.required_data_indexes}"
             )
             sampler = self.samplers[usage.used_sampler_index]
-            match self.sampler_types[usage.used_sampler_index]:
+            sampler_type = self.sampler_types[usage.used_sampler_index]
+            match sampler_type:
                 case SamplerType.SEQ_SAMPLER:
                     update_funcs.append(self.resolve_seq_sampler(sampler, usage.required_data_indexes))
                 case SamplerType.IDX_SAMPLER:
@@ -129,7 +130,7 @@ class Menta:
                 case SamplerType.DRC_SAMPLER:
                     update_funcs.append(self.resolve_drc_sampler(sampler, usage.required_data_indexes))
                 case _:
-                    raise RuntimeError(f"Unsupported sampler type: {self.sampler_types[usage.used_sampler_index]}")
+                    raise RuntimeError(f"Unsupported sampler type: {sampler_type}")
 
         match update_funcs:
             case [func]:
