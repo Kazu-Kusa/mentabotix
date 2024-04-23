@@ -183,7 +183,12 @@ class Menta:
             case _:
                 # >1 means require multiple data
                 required_indexes = required_data_indexes
-                return lambda: tuple(sampler()[i] for i in required_indexes)  # Callable[[],SensorDataSequence]
+
+                def _fun() -> Tuple[SensorData, ...]:
+                    data = sampler()
+                    return tuple(data[i] for i in required_indexes)
+
+                return _fun  # Callable[[],SensorDataSequence]
 
     @staticmethod
     def resolve_idx_sampler(sampler: IndexedSampler, required_data_indexes: Sequence[int]) -> UpdaterClosure:
