@@ -144,28 +144,18 @@ class Menta:
         return eval_obj
 
     def construct_judge_function(
-        self, usages: List[SamplerUsage], judging_source: str, extra_context: Dict[str, Any] = None
+        self, usages: List[SamplerUsage], judging_source: List[str] | str, extra_context: Dict[str, Any] = None
     ) -> Callable[[], bool]:
-        """
-        Constructs a judge function based on the given list of sampler usages, judging source, and extra context.
-        Basically the effect is equivalent to function inline, so it should have a better performance
-        Args:
-            usages (List[SamplerUsage]):
-                A list of sampler usages.
-            judging_source (str):
-                The source code for the judging logic.
-            extra_context (Dict[str, Any], optional):
-                Additional context to be used in the judging function. Defaults to None.
 
-        Returns:
-            Callable[[], bool]: The constructed judge function.
+        judging_source: str = judging_source if isinstance(judging_source, str) else "\n ".join(judging_source)
 
-        Raises:
-            RequirementError: If the judging source does not include all placeholders or if there is an error compiling
-             the function source.
-            RuntimeError: If an unsupported sampler type is encountered.
+        RET_IDENTIFIER: str = "ret"
+        if RET_IDENTIFIER not in judging_source:
+            raise RequirementError(
+                f"Can't find {RET_IDENTIFIER} in judging source, you must define a variable named {RET_IDENTIFIER} in your judging source!\n"
+                f"Since it will be used as the return value of the judge function."
+            )
 
-        """
         _logger.debug("Match Usage with corresponding samplers and sampler_types")
         used_samplers: Dict[str, Any] = {
             f"func_{i}": self.samplers[usage.used_sampler_index] for i, usage in enumerate(usages)
@@ -198,6 +188,7 @@ class Menta:
                 f"Judging source must have all placeholders: {placebo_var_names} in judging_source\n"
                 f"Missing: {not_included}"
             )
+
         for placebo, expr in zip(placebo_var_names, indexed_expressions):
             _logger.debug(f'Replacing "{placebo}" with "{expr}".')
             judging_source = judging_source.replace(placebo, expr)
@@ -209,7 +200,7 @@ class Menta:
         )
         _logger.debug(f"Created temp_var_source: {temp_var_source}")
 
-        func_source = f"def _func():\n" f" {temp_var_source}\n" f" return {judging_source}"
+        func_source = f"def _func():\n" f" {temp_var_source}\n" f" {judging_source}\n" f" return {RET_IDENTIFIER}"
         _logger.debug(f"Created func_source: {func_source}")
         _logger.debug("Compiling func_source")
 

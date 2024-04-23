@@ -113,25 +113,36 @@ class TestMenta(unittest.TestCase):
         self.assertEqual(0, result[2])
 
     def test_construct_judge(self):
+        # Test with multiple usages
         sages = [
             SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
             SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
             SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
         ]
-        func = self.menta.construct_judge_function(usages=sages, judging_source="s0 or s1 or s2 or s3 or s4 or s5")
+        func = self.menta.construct_judge_function(usages=sages, judging_source="ret=s0 or s1 or s2 or s3 or s4 or s5")
         self.assertIsInstance(func, Callable)
         self.assertEqual(func(), 1.2)
-        func = self.menta.construct_judge_function(usages=sages, judging_source="s0+s1+s2+s3+s4+s5")
+        func = self.menta.construct_judge_function(usages=sages, judging_source="ret=s0+s1+s2+s3+s4+s5")
         self.assertIsInstance(func, Callable)
         self.assertEqual(func(), 53.5)
+
+        # Test with 1 usage
         func = self.menta.construct_judge_function(
             usages=[
                 SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
             ],
-            judging_source="s0 + s1",
+            judging_source="ret=s0 + s1",
         )
         self.assertIsInstance(func, Callable)
         self.assertEqual(func(), 2.5)
+
+        # Test with  multiline judging source
+        func = self.menta.construct_judge_function(
+            usages=sages,
+            judging_source=["a=s0+s1", "print(f'this is {a}')", "b=s3+s4+s5", "print(f'this is {b}')", "ret=s2"],
+        )
+        self.assertIsInstance(func, Callable)
+        self.assertEqual(func(), 50)
 
     def test_indexer_seq(self):
         varname = "hel"
