@@ -29,6 +29,7 @@ IndexedSampler: TypeAlias = Callable[[int], SensorData]
 DirectSampler: TypeAlias = Callable[[], SensorData]
 
 Sampler: TypeAlias = Union[SequenceSampler, IndexedSampler, DirectSampler]
+SourceCode: TypeAlias = str
 
 
 class SamplerType(Enum):
@@ -144,11 +145,27 @@ class Menta:
         return eval_obj
 
     def construct_judge_function(
-        self, usages: List[SamplerUsage], judging_source: List[str] | str, extra_context: Dict[str, Any] = None
+        self,
+        usages: List[SamplerUsage],
+        judging_source: List[SourceCode] | SourceCode,
+        extra_context: Dict[str, Any] = None,
     ) -> Callable[[], bool]:
+        """
+        构造一个判断函数。该函数根据提供的采样器使用情况、判断源和额外的上下文信息，动态生成一个判断逻辑的函数。
 
+        参数:
+        - usages: 一个SamplerUsage对象的列表，描述了每个采样器是如何被使用的。
+        - judging_source: 判断源，可以是字符串或字符串列表。定义了判断逻辑的代码。
+        - extra_context: 可选的字典，提供了额外的上下文信息，这些信息在执行判断函数时会包含在执行环境中。
+
+        返回值:
+        - 一个无参数的布尔型函数，执行时根据判断逻辑返回True或False。
+        """
+
+        # 将judging_source统一处理为字符串格式
         judging_source: str = judging_source if isinstance(judging_source, str) else "\n ".join(judging_source)
 
+        # 定义返回标识符，检查判断源中是否包含该标识符
         RET_IDENTIFIER: str = "ret"
         if RET_IDENTIFIER not in judging_source:
             raise RequirementError(
@@ -156,6 +173,7 @@ class Menta:
                 f"Since it will be used as the return value of the judge function."
             )
 
+        # 匹配使用情况与相应的采样器和采样器类型
         _logger.debug("Match Usage with corresponding samplers and sampler_types")
         used_samplers: Dict[str, Any] = {
             f"func_{i}": self.samplers[usage.used_sampler_index] for i, usage in enumerate(usages)
@@ -164,6 +182,8 @@ class Menta:
         self.update_sampler_types()
         used_sampler_types = [self.sampler_types[usage.used_sampler_index] for usage in usages]
         _logger.debug(f"Matched sampler_types: {used_sampler_types}")
+
+        # 根据采样器类型，为采样器数据创建索引表达式
         sampler_temp_var_names_mapping: Dict[str, str] = {}
         indexed_expressions: List[str] = []
         for usage, sampler_type, func_name in zip(usages, used_sampler_types, used_samplers):
@@ -180,6 +200,8 @@ class Menta:
                 case _:
                     raise RuntimeError(f"Unsupported sampler type: {sampler_type}")
         _logger.debug(f"Created {len(indexed_expressions)} indexed expressions.")
+
+        # 创建占位变量并检查是否所有占位符都被包含在判断源中
         placebo_var_names = [f"s{i}" for i in range(len(indexed_expressions))]
         _logger.debug(f"Created {len(placebo_var_names)} placebo variables.")
         _logger.debug("Checking that all placeholders are included in judging_source")
@@ -189,10 +211,12 @@ class Menta:
                 f"Missing: {not_included}"
             )
 
+        # 替换判断源中的占位符为索引表达式
         for placebo, expr in zip(placebo_var_names, indexed_expressions):
             _logger.debug(f'Replacing "{placebo}" with "{expr}".')
             judging_source = judging_source.replace(placebo, expr)
 
+        # 创建临时变量的源代码，用于在执行环境中存储采样器的返回值
         temp_var_source: str = (
             ",".join(sampler_temp_var_names_mapping.keys())
             + "="
@@ -200,10 +224,12 @@ class Menta:
         )
         _logger.debug(f"Created temp_var_source: {temp_var_source}")
 
+        # 构建完整的函数源码并编译执行
         func_source = f"def _func():\n" f" {temp_var_source}\n" f" {judging_source}\n" f" return {RET_IDENTIFIER}"
         _logger.debug(f"Created func_source: {func_source}")
         _logger.debug("Compiling func_source")
 
+        # 更新执行环境中的采样器和额外上下文信息
         used_samplers.update(extra_context) if extra_context else None
         exec(func_source, used_samplers)  # exec the source with the context
         func_obj: Callable[[], bool] = used_samplers.get("_func")
