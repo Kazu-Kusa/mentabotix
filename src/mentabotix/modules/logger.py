@@ -3,7 +3,7 @@ import logging
 import coloredlogs
 
 # 初始化logger
-_logger = logging.getLogger("bdmc")
+_logger = logging.getLogger("mentabotix")
 coloredlogs.install(logger=_logger, level=logging.DEBUG)
 
 
