@@ -12,6 +12,8 @@ from typing import (
     Self,
     SupportsInt,
     SupportsFloat,
+    Dict,
+    Any,
 )
 
 from .exceptions import BadSignatureError, RequirementError
@@ -141,6 +143,144 @@ class Menta:
         eval_obj = eval(eval_string, eval_kwargs)
         return eval_obj
 
+    def construct_judge_function(
+        self, usages: List[SamplerUsage], judging_source: str, extra_context: Dict[str, Any] = None
+    ) -> Callable[[], bool]:
+        """
+        Constructs a judge function based on the given list of sampler usages, judging source, and extra context.
+        Basically the effect is equivalent to function inline, so it should have a better performance
+        Args:
+            usages (List[SamplerUsage]):
+                A list of sampler usages.
+            judging_source (str):
+                The source code for the judging logic.
+            extra_context (Dict[str, Any], optional):
+                Additional context to be used in the judging function. Defaults to None.
+
+        Returns:
+            Callable[[], bool]: The constructed judge function.
+
+        Raises:
+            RequirementError: If the judging source does not include all placeholders or if there is an error compiling
+             the function source.
+            RuntimeError: If an unsupported sampler type is encountered.
+
+        """
+        _logger.debug("Match Usage with corresponding samplers and sampler_types")
+        used_samplers: Dict[str, Any] = {
+            f"func_{i}": self.samplers[usage.used_sampler_index] for i, usage in enumerate(usages)
+        }
+        _logger.debug(f"Matched samplers: {used_samplers}")
+        self.update_sampler_types()
+        used_sampler_types = [self.sampler_types[usage.used_sampler_index] for usage in usages]
+        _logger.debug(f"Matched sampler_types: {used_sampler_types}")
+        sampler_temp_var_names_mapping: Dict[str, str] = {}
+        indexed_expressions: List[str] = []
+        for usage, sampler_type, func_name in zip(usages, used_sampler_types, used_samplers):
+
+            match sampler_type:
+                case SamplerType.SEQ_SAMPLER:
+                    sampler_temp_var_names_mapping[temp_name := f"{func_name}_temp"] = func_name
+                    indexed_expressions.extend(self._index_for_seq_sampler_data(temp_name, usage.required_data_indexes))
+                case SamplerType.IDX_SAMPLER:
+                    indexed_expressions.extend(self._index_for_idx_sampler_data(func_name, usage.required_data_indexes))
+                case SamplerType.DRC_SAMPLER:
+                    sampler_temp_var_names_mapping[temp_name := f"{func_name}_temp"] = func_name
+                    indexed_expressions.extend(self._index_for_drc_sampler_data(temp_name, usage.required_data_indexes))
+                case _:
+                    raise RuntimeError(f"Unsupported sampler type: {sampler_type}")
+        _logger.debug(f"Created {len(indexed_expressions)} indexed expressions.")
+        placebo_var_names = [f"s{i}" for i in range(len(indexed_expressions))]
+        _logger.debug(f"Created {len(placebo_var_names)} placebo variables.")
+        _logger.debug("Checking that all placeholders are included in judging_source")
+        if not_included := [placebo for placebo in placebo_var_names if placebo not in judging_source]:
+            raise RequirementError(
+                f"Judging source must have all placeholders: {placebo_var_names} in judging_source\n"
+                f"Missing: {not_included}"
+            )
+        for placebo, expr in zip(placebo_var_names, indexed_expressions):
+            _logger.debug(f'Replacing "{placebo}" with "{expr}".')
+            judging_source = judging_source.replace(placebo, expr)
+
+        temp_var_source: str = (
+            ",".join(sampler_temp_var_names_mapping.keys())
+            + "="
+            + ",".join([f"{fname}()" for fname in sampler_temp_var_names_mapping.values()])
+        )
+        _logger.debug(f"Created temp_var_source: {temp_var_source}")
+
+        func_source = f"def _func():\n" f" {temp_var_source}\n" f" return {judging_source}"
+        _logger.debug(f"Created func_source: {func_source}")
+        _logger.debug("Compiling func_source")
+
+        used_samplers.update(extra_context) if extra_context else None
+        exec(func_source, used_samplers)  # exec the source with the context
+        func_obj: Callable[[], bool] = used_samplers.get("_func")
+        _logger.debug(f"Succeed, compiled func_obj: {func_obj}")
+        return func_obj
+
+    @staticmethod
+    def _index_for_seq_sampler_data(data_var_name: str, required: List[int] | int) -> List[str]:
+        """
+        A function that generates a list of indexed expressions based on the given data variable name and a list of required indexes.
+
+        Args:
+            data_var_name (str): The name of the data variable.
+            required (List[int] | int): Either a single integer representing the required sequence length or a list of required data indexes.
+
+        Returns:
+            List[str]: A list of indexed expressions based on the data variable name and required indexes.
+        """
+        match required:
+            case int(required_seq_length):
+                final_required_data_indexes = range(required_seq_length)
+            case list(required_data_indexes):
+                final_required_data_indexes = required_data_indexes
+            case _:
+                raise RequirementError(
+                    f"Unknown Input, arg::required has to be either list[int] or int, got {required}"
+                )
+        return [f"{data_var_name}[{i}]" for i in final_required_data_indexes]
+
+    @staticmethod
+    def _index_for_drc_sampler_data(data_var_name: str, required: List[int] | int) -> List[str]:
+        """
+        A function that generates a list of indexed expressions based on the given data variable name and a list of required indexes.
+
+        Args:
+            data_var_name (str): The name of the data variable.
+            required (List[int] | int): Either a single integer representing the required sequence length or a list of required data indexes.
+
+        Returns:
+            List[str]: A list of indexed expressions based on the data variable name and required indexes.
+        """
+        match required:
+            case []:
+                raise RequirementError("Can't resolve the empty Usage List")
+            case int(required_seq_length):
+                final_required_data_indexes = range(required_seq_length)
+            case list(required_data_indexes):
+                final_required_data_indexes = required_data_indexes
+            case _:
+                raise RequirementError(
+                    f"Unknown Input, arg::required has to be either list[int] or int, got {required}"
+                )
+        return [f"(({data_var_name}>>{i})&1)" for i in final_required_data_indexes]
+
+    @staticmethod
+    def _index_for_idx_sampler_data(func_var_name: str, required: List[int]) -> List[str]:
+        """
+        Generate a list of indexed expressions based on the given function variable name and a list of required indexes.
+
+        Args:
+            func_var_name (str): The name of the function variable.
+            required (List[int]): A list of required indexes.
+
+        Returns:
+            List[str]: A list of indexed expressions based on the function variable name and required indexes.
+        """
+        return [f"{func_var_name}({i})" for i in required]
+
     @staticmethod
     def resolve_seq_sampler(sampler: SequenceSampler, required_data_indexes: Sequence[int]) -> UpdaterClosure:
         """
@@ -151,7 +291,8 @@ class Menta:
             required_data_indexes (Sequence[int]): The required data indexes.
 
         Returns:
-            UpdaterClosure: A callable that returns a tuple of SensorData objects or a single SensorData object based on the number of required data indexes.
+            UpdaterClosure: A callable that returns a tuple of SensorData objects
+            or a single SensorData object based on the number of required data indexes.
 
         Raises:
             None
@@ -252,7 +393,7 @@ class Menta:
             case 1:
                 # 1 means require a specific data
                 unique_index = required_data_indexes[0]
-                return lambda: (sampler() << unique_index) & 1
+                return lambda: (sampler() >> unique_index) & 1
             case _:
                 # >1 means require multiple data
 

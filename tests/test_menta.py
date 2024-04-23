@@ -1,5 +1,5 @@
 import unittest
-from typing import List
+from typing import List, Callable
 
 from mentabotix import set_log_level
 from mentabotix.modules.menta import (
@@ -111,6 +111,54 @@ class TestMenta(unittest.TestCase):
         self.assertEqual(0, result[0])
         self.assertEqual(1, result[1])
         self.assertEqual(0, result[2])
+
+    def test_construct_judge(self):
+        sages = [
+            SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+            SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
+            SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
+        ]
+        func = self.menta.construct_judge_function(usages=sages, judging_source="s0 or s1 or s2 or s3 or s4 or s5")
+        self.assertIsInstance(func, Callable)
+        self.assertEqual(func(), 1.2)
+        func = self.menta.construct_judge_function(usages=sages, judging_source="s0+s1+s2+s3+s4+s5")
+        self.assertIsInstance(func, Callable)
+        self.assertEqual(func(), 53.5)
+        func = self.menta.construct_judge_function(
+            usages=[
+                SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+            ],
+            judging_source="s0 + s1",
+        )
+        self.assertIsInstance(func, Callable)
+        self.assertEqual(func(), 2.5)
+
+    def test_indexer_seq(self):
+        varname = "hel"
+        req = [0, 1, 2, 3]
+        data_1 = self.menta._index_for_seq_sampler_data(varname, req)
+        print(data_1)
+        self.assertEqual(["hel[0]", "hel[1]", "hel[2]", "hel[3]"], data_1)
+
+        data_2 = self.menta._index_for_seq_sampler_data(varname, len(req))
+        self.assertEqual(["hel[0]", "hel[1]", "hel[2]", "hel[3]"], data_2)
+
+    def test_indexer_drc(self):
+        varname = "hel"
+        req = [0, 1, 2]
+
+        data_3 = self.menta._index_for_drc_sampler_data(varname, req)
+        self.assertEqual(["((hel>>0)&1)", "((hel>>1)&1)", "((hel>>2)&1)"], data_3)
+
+        data_4 = self.menta._index_for_drc_sampler_data(varname, len(req))
+        self.assertEqual(["((hel>>0)&1)", "((hel>>1)&1)", "((hel>>2)&1)"], data_4)
+
+    def test_indexer_idx(self):
+        varname = "hel"
+        req = [0, 1, 2]
+        data_1 = self.menta._index_for_idx_sampler_data(varname, req)
+        print(data_1)
+        self.assertEqual(["hel(0)", "hel(1)", "hel(2)"], data_1)
 
     def tearDown(self):
         # 清理可能的副作用
