@@ -17,7 +17,7 @@ from typing import (
 from .exceptions import BadSignatureError, RequirementError
 from .logger import _logger
 
-SensorData = float | int
+SensorData: TypeAlias = float | int
 # basically, no restrictions, support py objects or ctypes._CData variants
 SensorDataSequence: TypeAlias = Sequence[SensorData]
 UpdaterClosure = Callable[[], SensorDataSequence] | Callable[[], SensorData]
@@ -93,7 +93,7 @@ class Menta:
                     )
         return self  # 返回更新后的实例自身
 
-    def construct_updater(self, usages: List[SamplerUsage]) -> Callable[[], Tuple]:
+    def construct_updater(self, usages: List[SamplerUsage]) -> Callable[[], Tuple] | Callable[[], SensorData]:
         """
         Constructs an updater function based on the given list of sampler usages.
 
@@ -132,21 +132,14 @@ class Menta:
                 case _:
                     raise RuntimeError(f"Unsupported sampler type: {sampler_type}")
 
-        match update_funcs:
-            case [func]:
-                return func
-            case [func_1, func_2]:
-                return lambda: (func_1(), func_2())
-            case [func_1, func_2, func_3]:
-                return lambda: (func_1(), func_2(), func_3())
-            case [func_1, func_2, func_3, func_4]:
-                return lambda: (func_1(), func_2(), func_3(), func_4())
-            case _:
-
-                def _updater() -> Tuple:
-                    return tuple(update_func() for update_func in update_funcs)
-
-                return _updater
+        # TODO allow make flatten ret
+        if len(update_funcs) == 1:
+            return update_funcs[0]
+        eval_kwargs = {f"func_{i}": update_funcs[i] for i in range(len(update_funcs))}
+        func_call_strings = [f"{func}()" for func in eval_kwargs]
+        eval_string = "lambda:" + "(" + f",".join(func_call_strings) + ")"
+        eval_obj = eval(eval_string, eval_kwargs)
+        return eval_obj
 
     @staticmethod
     def resolve_seq_sampler(sampler: SequenceSampler, required_data_indexes: Sequence[int]) -> UpdaterClosure:
