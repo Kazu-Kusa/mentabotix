@@ -97,6 +97,21 @@ class TestMenta(unittest.TestCase):
         self.assertIsInstance(result, int)
         self.assertEqual(result, 42)
 
+        """
+        f'{42:08b}' => '00101010'
+        # make this 8-bits to list should get [0,1,0,1,0,1,0,0], it is reversed
+        """
+        usage = SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2])
+        updater = self.menta.resolve_drc_sampler(
+            sampler=self.menta.samplers[usage.used_sampler_index], required_data_indexes=usage.required_data_indexes
+        )
+        result = updater()
+        print(result)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(0, result[0])
+        self.assertEqual(1, result[1])
+        self.assertEqual(0, result[2])
+
     def tearDown(self):
         # 清理可能的副作用
         pass

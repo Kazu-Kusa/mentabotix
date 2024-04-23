@@ -258,6 +258,6 @@ class Menta:
 
                 def _fun() -> SensorDataSequence:
                     temp_seq = sampler()
-                    return tuple(temp_seq << ri for ri in required_data_indexes)
+                    return tuple((temp_seq >> ri) & 1 for ri in required_data_indexes)
 
                 return _fun
