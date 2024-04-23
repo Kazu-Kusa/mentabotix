@@ -1,4 +1,4 @@
-from .modules.botix import MovingState, MovingTransform, Compiler
+from .modules.botix import MovingState, MovingTransform, Botix
 from .modules.exceptions import BadSignatureError, RequirementError, SamplerTypeError
 from .modules.logger import set_log_level
 from .modules.menta import Menta, SequenceSampler, IndexedSampler, DirectSampler, SamplerUsage, SamplerType, Sampler
@@ -8,7 +8,7 @@ __all__ = [
     # botix
     "MovingState",
     "MovingTransform",
-    "Compiler",
+    "Botix",
     # menta
     "Menta",
     "SequenceSampler",

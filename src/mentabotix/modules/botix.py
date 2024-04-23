@@ -311,7 +311,7 @@ class MovingTransform:
 TokenPool: TypeAlias = List[MovingState | MovingTransform]
 
 
-class Compiler:
+class Botix:
 
     def __init__(
         self, controller: CloseLoopController, token_pool: Optional[List[MovingState | MovingTransform]] = None
