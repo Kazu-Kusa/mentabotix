@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import dataclass
 from inspect import signature, Signature
 from typing import (
@@ -20,6 +21,8 @@ from typing import (
 
 import numpy as np
 from bdmc import CloseLoopController
+
+from .exceptions import StructuralError
 
 FullPattern: TypeAlias = Tuple[int]
 LRPattern: TypeAlias = Tuple[int, int]
@@ -70,12 +73,34 @@ class MovingState:
         """
         return self._identifier
 
+    @property
+    def before_entering(self) -> Optional[List[Callable[[], None]]]:
+        """
+        Returns the list of functions to be called before entering the state.
+
+        :return: An optional list of callables that take no arguments and return None.
+        :rtype: Optional[List[Callable[[], None]]]
+        """
+        return self._before_entering
+
+    @property
+    def after_exiting(self) -> Optional[List[Callable[[], None]]]:
+        """
+        Returns the list of functions to be called after exiting the state.
+
+        :return: An optional list of callables that take no arguments and return None.
+        :rtype: Optional[List[Callable[[], None]]]
+        """
+        return self._after_exiting
+
     def __init__(
         self,
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
         speed_expressions: Optional[
             FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]
         ] = None,
+        before_entering: Optional[List[Callable[[], None]]] = None,
+        after_exiting: Optional[List[Callable[[], None]]] = None,
     ) -> None:
         """
         Initialize the MovingState with speeds.
@@ -87,9 +112,15 @@ class MovingState:
                     - LRPattern: A tuple of two integers representing left and right speeds.
                     - IndividualPattern: A tuple of four integers representing individual speeds for each direction.
 
+        Keyword Args:
+            speed_expressions (Optional[FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]]): The speed expressions of the wheels.
+            before_entering (Optional[List[Callable[[], None]]]): The list of functions to be called before entering the state.
+            after_exiting (Optional[List[Callable[[], None]]]): The list of functions to be called after exiting the state.
         Raises:
             ValueError: If the provided speeds do not match any of the above patterns.
         """
+        self._before_entering = before_entering
+        self._after_exiting = after_exiting
         self._identifier = self.__state_id_counter__
         self.__state_id_counter__ += 1
         match bool(speed_expressions), bool(speeds):
@@ -250,11 +281,11 @@ class MovingState:
         self._speeds *= multiplier
         return self
 
-    def unwrap(self) -> np.array:
+    def unwrap(self) -> Tuple[int,...]:
         """
         Return the speeds of the MovingState object.
         """
-        return self._speeds
+        return tuple(self._speeds)
 
     def clone(self) -> Self:
         """
@@ -263,14 +294,19 @@ class MovingState:
         Returns:
             Self: A new `MovingState` object with the same speeds as the current object.
         """
-        if self._speeds:
 
-            return MovingState(*tuple(self._speeds))
-        else:
-            return MovingState(speed_expressions=self._speed_expressions)
+        return MovingState(
+            *tuple(self._speeds),
+            speed_expressions=self._speed_expressions,
+            before_entering=self._before_entering,
+            after_exiting=self._after_exiting,
+        )
+
+
+    def make(self)->str:
+        #TODO
 
     def __hash__(self) -> int:
-
         return self._identifier
 
     def __eq__(self, other: Self) -> bool:
@@ -280,9 +316,9 @@ class MovingState:
         return f"{self._identifier}-MovingState({self._speeds or self._speed_expressions})"
 
 
-class MovingTransform:
+class MovingTransition:
     """
-    A class that represents a moving transform.
+    A class that represents a moving transition.
     A moving transform is a transition between two states in a state machine.
     Features multiple branches and a breaker function to determine if the transition should be broken.
     """
@@ -363,13 +399,19 @@ class MovingTransform:
         self.to_states[key] = state
         return self
 
+    def make(self)->str:
+        #TODO
 
-TokenPool: TypeAlias = List[MovingTransform]
+    def __str__(self):
+        return f"{self.from_states} -> {self.to_states}"
+
+
+TokenPool: TypeAlias = List[MovingTransition]
 
 
 class Botix:
 
-    def __init__(self, controller: CloseLoopController, token_pool: Optional[List[MovingTransform]] = None):
+    def __init__(self, controller: CloseLoopController, token_pool: Optional[List[MovingTransition]] = None):
         self.controller: CloseLoopController = controller
         self.token_pool: TokenPool = token_pool or []
 
@@ -378,6 +420,9 @@ class Botix:
         """
         Calculates the indegree of each state in the token pool to ensure unique starting states.
 
+        This method iterates through all tokens in the token pool and counts the indegree (the number of incoming edges) for each state.
+        It ensures that there is exactly one state with zero indegree, which represents the unique starting state.
+
         Args:
             token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
 
@@ -385,15 +430,21 @@ class Botix:
             ValueError: If there is not exactly one state with a zero indegree.
 
         Returns:
-            None
+            MovingState: The unique starting state if exactly one state has zero indegree.
         """
+        # Initialize a dictionary to store the indegree of each state
         states_indegree: Dict[MovingState, int] = {}
 
+        # Calculate the indegree of each state
         for token in token_pool:
             for state in token.to_states.values():
+                # Increment the indegree of each state reached by the token
                 states_indegree[state] = states_indegree.get(state, 0) + 1
 
+        # Identify states with zero indegree
         zero_indegree_states = [state for state, indegree in states_indegree.items() if indegree == 0]
+
+        # Ensure there is exactly one state with zero indegree
         if zero_indegree_states == 1:
             return zero_indegree_states[0]
         else:
@@ -404,16 +455,26 @@ class Botix:
         """
         Calculates the end states of the given token pool.
 
+        This function iterates through each token in the provided token pool,
+        counting the number of outgoing transitions from each state.
+        States with no outgoing transitions are considered end states.
+
         Args:
             token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
 
         Returns:
             Set[MovingState]: A set of MovingState objects representing the end states of the token pool.
         """
+        # Initialize a dictionary to keep track of the outdegree (number of outgoing transitions)
+        # for each state.
         states_outdegree: Dict[MovingState, int] = {}
+
+        # Count the number of outgoing transitions from each state.
         for token in token_pool:
             for from_state in token.from_states:
                 states_outdegree[from_state] = states_outdegree.get(from_state, 0) + 1
+
+        # Identify end states by finding states with an outdegree of 0.
         end_states = {state for state, outdegree in states_outdegree.items() if outdegree == 0}
 
         return end_states
@@ -422,6 +483,10 @@ class Botix:
     def ensure_accessibility(token_pool: TokenPool, start_state: MovingState, end_states: Set[MovingState]) -> None:
         """
         Ensures that all states in the given token pool are accessible from the start state.
+
+        This method performs a breadth-first search to check if all specified end states can be reached
+        from the given start state by traversing through the token pool. It raises a ValueError if any
+        end state is not accessible.
 
         Args:
             token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
@@ -434,21 +499,79 @@ class Botix:
         Returns:
             None
         """
+        # Initialize a queue for BFS and a set to keep track of states not accessible from the start state
         search_queue: List[MovingState] = [start_state]
         not_accessible_states: Set[MovingState] = end_states
+
+        # Perform breadth-first search to find if all end states are accessible
         while search_queue:
+            # Pop the next state from the queue to explore
             current_state: MovingState = search_queue.pop(0)
             connected_states: List[MovingState] = []
+
+            # Explore all tokens that can be reached from the current state
             for token in token_pool:
                 if current_state in token.from_states:
+                    # Add all to_states of the current token to the connected states list
                     connected_states.extend(token.to_states.values())
+
+            # Update the set of not accessible states by removing the states we just found to be connected
             not_accessible_states -= set(connected_states)
+
+            # If there are no more not accessible states, we are done
             if not_accessible_states == set():
                 break
+
+        # If there are still states marked as not accessible, raise an exception
         if not_accessible_states:
             raise ValueError(f"States {not_accessible_states} are not accessible from {start_state}")
 
+    @staticmethod
+    def ensure_structure_validity(pool: TokenPool) -> None:
+        """
+        Ensures the structural validity of a given token pool by verifying that each state connects to exactly one transition as its input.
+        Branching logic is implemented within the MovingTransition class.
+
+        Parameters:
+            pool (TokenPool): A list of MovingTransform objects representing the token pool.
+
+        Raises:
+            StructuralError: If any state is found connecting to multiple transitions as inputs.
+                The error message includes details on the conflicting transitions for each affected state.
+
+        Returns:
+            None: If all states connect to a single input transition.
+        """
+        # Collect all states from the pool
+        states: List[MovingState] = []
+
+        for trans in pool:
+            states.extend(trans.from_states)
+        # Count occurrences of each state
+        element_counts = Counter(states)
+
+        # Identify states with multiple occurrences (potential structural issues)
+        frequent_elements: List[MovingState] = [element for element, count in element_counts.items() if count >= 2]
+        if not frequent_elements:
+            return None
+        # Construct error message
+        std_err = (
+            "Each state must connect to EXACTLY one transition as its input, as branching is implemented INSIDE the MovingTransition class.\n"
+            "Below are error details:\n"
+        )
+        for state in frequent_elements:
+            # Find transitions conflicting with the current state
+            conflict_trans: List[MovingTransition] = list(
+                filter(lambda transition: state in transition.from_states, pool)
+            )
+            std_err += f"For {state}, there are {len(conflict_trans)} conflicting transitions:\n\t" + "\n\t".join(
+                [f"{trans}" for trans in conflict_trans]
+            )
+        # Raise StructuralError with the prepared message
+        raise StructuralError(std_err)
+
     def _check_met_requirements(self):
+        self.ensure_structure_validity(self.token_pool)
         start_state = self.ensure_unique_start(self.token_pool)
         end_states = self.ensure_end_state(self.token_pool)
         self.ensure_accessibility(self.token_pool, start_state, end_states)
@@ -459,14 +582,33 @@ class Botix:
         Returns:
 
         """
+        function_context: Dict[str, Any] = {"con": self.controller}
 
-        # TODO: static pattern
-        # TODO: dynamic pattern
-        def _func():
+        self._check_met_requirements()
+        function_string: str = f"def _func():\n" f" con"
 
-            pass
+        return
 
-        return _func
+    def _make_chain_expression(
+        self, start_state: MovingState, end_state: MovingState, controller_name: str = "con"
+    ) -> str:
+
+        if start_state == end_state:
+            #TODO fill the one state case
+        self.ensure_accessibility(self.token_pool, start_state, {end_state})
+        chain_elements: List[MovingState | MovingTransition] = [start_state]
+        while True:
+            current_state = chain_elements[-1]
+            connected_transitions: List[MovingTransition] = list(
+                filter(lambda trans: current_state in trans.from_states, self.token_pool)
+            )
+            if len(connected_transitions) > 1:
+                raise StructuralError(
+                    f"{current_state} is the input of more than one transition, which is not allowed.\n"
+                    f"you can check the structure of the token pool using self.ensure_structure_validity method."
+                )
+            if len(connected_transitions) == 0:
+                raise StructuralError(f"{current_state} is a terminate")
 
 
 if __name__ == "__main__":
