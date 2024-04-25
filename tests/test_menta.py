@@ -171,6 +171,50 @@ class TestMenta(unittest.TestCase):
         print(data_1)
         self.assertEqual(["hel(0)", "hel(1)", "hel(2)"], data_1)
 
+    def test_constructed_judge_function_performance(self):
+        sages = [
+            SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+            SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
+            SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
+        ]
+        func = self.menta.construct_judge_function(usages=sages, judging_source="ret=s0+s1+s2+s3+s4+s5")
+
+        def _manual_seq_func():
+            seq_temp = mock_sequence_sampler()
+
+            return seq_temp[0], seq_temp[2]
+
+        def _manual_drc_func():
+            drc_temp = mock_direct_sampler()
+            return tuple((drc_temp >> ri) & 1 for ri in [0, 1, 2])
+
+        def _manual_asm_func():
+            return *_manual_seq_func(), mock_indexed_sampler(5), *_manual_drc_func()
+
+        def _manual_judge_func():
+            return sum(_manual_asm_func())
+
+        self.assertEqual(func(), _manual_judge_func())
+
+        import timeit
+
+        # 假设这两个函数已经在你的代码中定义好了
+
+        # 设置测试次数（例如：1000次）
+        number_of_runs = 1000
+
+        # 对func()进行计时测试
+        func_time = timeit.timeit(lambda: func(), number=number_of_runs)
+
+        print(f"func() execution time for {number_of_runs} runs: {func_time:.6f} seconds")
+
+        # 对_manual_judge_func()进行计时测试
+        manual_judge_func_time = timeit.timeit(lambda: _manual_judge_func(), number=number_of_runs)
+
+        print(f"_manual_judge_func() execution time for {number_of_runs} runs: {manual_judge_func_time:.6f} seconds")
+
+        print(f"func() is {manual_judge_func_time / func_time:.2f} times faster than _manual_judge_func()")
+
     def tearDown(self):
         # 清理可能的副作用
         pass
