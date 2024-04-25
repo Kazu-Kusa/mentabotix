@@ -8,3 +8,7 @@ class BadSignatureError(Exception):
 
 class SamplerTypeError(Exception):
     pass
+
+
+class StructuralError(Exception):
+    pass
