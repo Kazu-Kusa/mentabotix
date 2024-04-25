@@ -14,6 +14,8 @@ from typing import (
     Dict,
     Optional,
     List,
+    ClassVar,
+    Set,
 )
 
 import numpy as np
@@ -22,7 +24,13 @@ from bdmc import CloseLoopController
 FullPattern: TypeAlias = Tuple[int]
 LRPattern: TypeAlias = Tuple[int, int]
 IndividualPattern: TypeAlias = Tuple[int, int, int, int]
+FullExpressionPattern: TypeAlias = str
+LRExpressionPattern: TypeAlias = Tuple[str, str]
+IndividualExpressionPattern: TypeAlias = Tuple[str, str, str, str]
 KT = TypeVar("KT", bound=Hashable)
+
+
+__PLACE_HOLDER__ = "Hello World"
 
 
 class MovingState:
@@ -50,7 +58,25 @@ class MovingState:
         diagonal_multiplier: float = 1.53
         # TODO: remove the dimensionless feature
 
-    def __init__(self, *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern]):
+    __state_id_counter__: ClassVar[int] = 0
+
+    @property
+    def state_id(self) -> int:
+        """
+        Returns the state identifier.
+
+        Returns:
+            int: The state identifier.
+        """
+        return self._identifier
+
+    def __init__(
+        self,
+        *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
+        speed_expressions: Optional[
+            FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]
+        ] = None,
+    ) -> None:
         """
         Initialize the MovingState with speeds.
 
@@ -64,17 +90,38 @@ class MovingState:
         Raises:
             ValueError: If the provided speeds do not match any of the above patterns.
         """
-        match speeds:
-            case (int(full_speed),):
-                self._speeds: np.array = np.full((4,), full_speed)
+        self._identifier = self.__state_id_counter__
+        self.__state_id_counter__ += 1
+        match bool(speed_expressions), bool(speeds):
+            case True, False:
+                self._speeds = None
+                self._speed_expressions: FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern = (
+                    speed_expressions
+                )
+            case False, True:
+                self._speed_expressions = None
+                match speeds:
+                    case (int(full_speed),):
+                        self._speeds: np.array = np.full((4,), full_speed)
 
-            case (int(left_speed), int(right_speed)):
-                self._speeds = np.array([left_speed, left_speed, right_speed, right_speed])
-            case speeds if len(speeds) == 4:
-                self._speeds = np.array(speeds)
-            case _:
-                types = tuple(type(item) for item in speeds)
-                raise ValueError(f"Invalid Speeds. Must be one of [(int,),(int,int),(int,int,int,int)], got {types}")
+                    case (int(left_speed), int(right_speed)):
+                        self._speeds = np.array([left_speed, left_speed, right_speed, right_speed])
+                    case speeds if len(speeds) == 4:
+                        self._speeds = np.array(speeds)
+                    case _:
+                        types = tuple(type(item) for item in speeds)
+                        raise ValueError(
+                            f"Invalid Speeds. Must be one of [(int,),(int,int),(int,int,int,int)], got {types}"
+                        )
+            case True, True:
+                raise ValueError(
+                    f"Cannot provide both speeds and speed_expressions, got {speeds} and {speed_expressions}"
+                )
+
+            case False, False:
+                raise ValueError(
+                    f"Must provide either speeds or speed_expressions, got {speeds} and {speed_expressions}"
+                )
 
     @classmethod
     def halt(cls) -> Self:
@@ -216,13 +263,21 @@ class MovingState:
         Returns:
             Self: A new `MovingState` object with the same speeds as the current object.
         """
-        return MovingState(self._speeds)
+        if self._speeds:
+
+            return MovingState(*tuple(self._speeds))
+        else:
+            return MovingState(speed_expressions=self._speed_expressions)
 
     def __hash__(self) -> int:
-        return hash(tuple(self._speeds))
+
+        return self._identifier
 
     def __eq__(self, other: Self) -> bool:
-        return tuple(self._speeds) == tuple(other._speeds)
+        return tuple(self._speeds) == tuple(other._speeds) and self._speed_expressions == other._speed_expressions
+
+    def __str__(self):
+        return f"{self._identifier}-MovingState({self._speeds or self._speed_expressions})"
 
 
 class MovingTransform:
@@ -236,22 +291,20 @@ class MovingTransform:
         self,
         duration: float,
         breaker: Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]] = None,
-        from_states: Optional[Iterable[MovingState]] = None,
-        to_states: Optional[Iterable[MovingState]] = None,
-        match_cases: Optional[Dict[KT, MovingState]] = None,
+        from_states: Optional[Iterable[MovingState] | MovingState] = None,
+        to_states: Optional[Dict[KT, MovingState] | MovingState] = None,
     ):
         """
-        Initializes a new instance of the MovingTransform class.
+        Initializes a new instance of the class.
 
         Args:
-            duration (float): The duration of the transition.
-            breaker (Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]]): A function that determines if the transition should be broken.
-            from_states (Optional[Iterable[MovingState]]): The initial state of the transition.
-            to_states (Optional[Iterable[MovingState]]): The final state of the transition.
-            match_cases (Optional[Dict[KT, MovingState]]): A dictionary of branch rules for the transition.
+            duration (float): The duration of the moving transform.
+            breaker (Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]]): The breaker function to determine if the transition should be broken. Defaults to None.
+            from_states (Optional[Iterable[MovingState]|MovingState]): The states the moving transform is transitioning from. Defaults to None.
+            to_states (Optional[Dict[KT, MovingState]|MovingState]): The states the moving transform is transitioning to. Defaults to None.
 
         Raises:
-            ValueError: If the duration is not positive or if the breaker function does not have an annotated return type.
+            ValueError: If duration is non-positive or if breaker has an empty annotated return type.
 
         Returns:
             None
@@ -263,9 +316,25 @@ class MovingTransform:
 
         self.duration: float = duration
         self.breaker: Optional[Callable[[], Any]] = breaker
-        self.to_states: List[MovingState] = list(to_states) if to_states is not None else []
-        self.from_states: List[MovingState] = list(from_states) if from_states is not None else []
-        self.match_cases: Dict[KT, MovingState] = match_cases or {}
+        match from_states:
+            case None:
+                self.from_states: List[MovingState] = []
+            case state if isinstance(state, MovingState):
+                self.from_states: List[MovingState] = [from_states]
+            case state if isinstance(state, Iterable):
+                self.from_states: List[MovingState] = list(from_states)
+            case _:
+                raise ValueError(f"Invalid from_states, got {from_states}")
+
+        match to_states:
+            case None:
+                self.to_states: Dict[KT, MovingState] = {}
+            case state if isinstance(state, MovingState):
+                self.to_states: Dict[KT, MovingState] = {__PLACE_HOLDER__: state}
+            case state if isinstance(state, Iterable):
+                self.to_states: Dict[KT, MovingState] = {__PLACE_HOLDER__: to_states}
+            case _:
+                raise ValueError(f"Invalid to_states, got {to_states}")
 
     def add_from_state(self, state: MovingState) -> Self:
         """
@@ -280,55 +349,109 @@ class MovingTransform:
         self.from_states.append(state)
         return self
 
-    def add_to_state(self, state: MovingState) -> Self:
+    def add_to_state(self, key: KT, state: MovingState) -> Self:
         """
-        Adds a `MovingState` object to the `to_state` list.
+        Adds a state to the `to_states` dictionary with the given key and state.
 
         Args:
-            state (MovingState): The `MovingState` object to be added.
+            key (KT): The key to associate with the state.
+            state (MovingState): The state to add to the dictionary.
 
         Returns:
             Self: The current instance of the class.
         """
-        self.to_states.append(state)
-        return self
-
-    def add_match_case(self, key: KT, state: MovingState) -> Self:
-        """
-        Adds a rule to the `rules` dictionary with the given `key` and `state`.
-
-        Args:
-            key (KT): The key for the rule.
-            state (MovingState): The state for the rule.
-
-        Returns:
-            Self: The current instance of the class.
-        """
-        self.match_cases[key] = state
+        self.to_states[key] = state
         return self
 
 
-TokenPool: TypeAlias = List[MovingState | MovingTransform]
+TokenPool: TypeAlias = List[MovingTransform]
 
 
 class Botix:
 
-    def __init__(
-        self, controller: CloseLoopController, token_pool: Optional[List[MovingState | MovingTransform]] = None
-    ):
+    def __init__(self, controller: CloseLoopController, token_pool: Optional[List[MovingTransform]] = None):
         self.controller: CloseLoopController = controller
         self.token_pool: TokenPool = token_pool or []
 
-    def resolve_confilict(self, token_pool: TokenPool):
-        states = []
-        transforms = []
+    @staticmethod
+    def ensure_unique_start(token_pool: TokenPool) -> MovingState:
+        """
+        Calculates the indegree of each state in the token pool to ensure unique starting states.
+
+        Args:
+            token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
+
+        Raises:
+            ValueError: If there is not exactly one state with a zero indegree.
+
+        Returns:
+            None
+        """
+        states_indegree: Dict[MovingState, int] = {}
+
         for token in token_pool:
-            if isinstance(token, MovingState):
-                states.append(token)
-            elif isinstance(token, MovingTransform):
-                transforms.append(token)
-            else:
-                raise ValueError("Token must be either a MovingState or MovingTransform")
+            for state in token.to_states.values():
+                states_indegree[state] = states_indegree.get(state, 0) + 1
+
+        zero_indegree_states = [state for state, indegree in states_indegree.items() if indegree == 0]
+        if zero_indegree_states == 1:
+            return zero_indegree_states[0]
+        else:
+            raise ValueError(f"There must be exactly one state with a zero indegree, got {zero_indegree_states}")
+
+    @staticmethod
+    def ensure_end_state(token_pool: TokenPool) -> Set[MovingState]:
+        """
+        Calculates the end states of the given token pool.
+
+        Args:
+            token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
+
+        Returns:
+            Set[MovingState]: A set of MovingState objects representing the end states of the token pool.
+        """
+        states_outdegree: Dict[MovingState, int] = {}
+        for token in token_pool:
+            for from_state in token.from_states:
+                states_outdegree[from_state] = states_outdegree.get(from_state, 0) + 1
+        end_states = {state for state, outdegree in states_outdegree.items() if outdegree == 0}
+
+        return end_states
+
+    @staticmethod
+    def ensure_accessibility(token_pool: TokenPool, start_state: MovingState, end_states: Set[MovingState]) -> None:
+        """
+        Ensures that all states in the given token pool are accessible from the start state.
+
+        Args:
+            token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
+            start_state (MovingState): The starting state from which to check accessibility.
+            end_states (Set[MovingState]): A set of MovingState objects representing the end states of the token pool.
+
+        Raises:
+            ValueError: If there are states that are not accessible from the start state.
+
+        Returns:
+            None
+        """
+        search_queue: List[MovingState] = [start_state]
+        not_accessible_states: Set[MovingState] = end_states
+        while search_queue:
+            current_state: MovingState = search_queue.pop(0)
+            connected_states: List[MovingState] = []
+            for token in token_pool:
+                if current_state in token.from_states:
+                    connected_states.extend(token.to_states.values())
+            not_accessible_states -= set(connected_states)
+            if not_accessible_states == set():
+                break
+        if not_accessible_states:
+            raise ValueError(f"States {not_accessible_states} are not accessible from {start_state}")
+
+    def _check_met_requirements(self):
+        start_state = self.ensure_unique_start(self.token_pool)
+        end_states = self.ensure_end_state(self.token_pool)
+        self.ensure_accessibility(self.token_pool, start_state, end_states)
 
     def compile(self) -> Callable:
         """
@@ -337,6 +460,8 @@ class Botix:
 
         """
 
+        # TODO: static pattern
+        # TODO: dynamic pattern
         def _func():
 
             pass
