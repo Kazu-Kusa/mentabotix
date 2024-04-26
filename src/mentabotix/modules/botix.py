@@ -27,14 +27,14 @@ from .exceptions import StructuralError
 FullPattern: TypeAlias = Tuple[int]
 LRPattern: TypeAlias = Tuple[int, int]
 IndividualPattern: TypeAlias = Tuple[int, int, int, int]
-FullExpressionPattern: TypeAlias = str
+FullExpressionPattern: TypeAlias = Tuple[str]
 LRExpressionPattern: TypeAlias = Tuple[str, str]
 IndividualExpressionPattern: TypeAlias = Tuple[str, str, str, str]
 KT = TypeVar("KT", bound=Hashable)
 
 
 __PLACE_HOLDER__ = "Hello World"
-
+__CONTROLLER_NAME__ = "con"
 
 class MovingState:
     """
@@ -92,13 +92,22 @@ class MovingState:
         :rtype: Optional[List[Callable[[], None]]]
         """
         return self._after_exiting
+    @property
+    def used_context_variables(self) -> Set[str]:
+        """
+        Returns the set of context variable names used in the speed expressions.
 
+        :return: An optional set of strings representing the context variable names.
+        :rtype: Optional[Set[str]]
+        """
+        return self._used_context_variables
     def __init__(
         self,
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
         speed_expressions: Optional[
-            FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]
+            FullExpressionPattern| LRExpressionPattern | IndividualExpressionPattern
         ] = None,
+            used_context_variables: Optional[Set[str]] = None,
         before_entering: Optional[List[Callable[[], None]]] = None,
         after_exiting: Optional[List[Callable[[], None]]] = None,
     ) -> None:
@@ -119,30 +128,42 @@ class MovingState:
         Raises:
             ValueError: If the provided speeds do not match any of the above patterns.
         """
-        self._before_entering = before_entering
-        self._after_exiting = after_exiting
-        self._identifier = self.__state_id_counter__
-        self.__state_id_counter__ += 1
+        self._speed_expressions:IndividualExpressionPattern
+        self._speeds: np.array
+
         match bool(speed_expressions), bool(speeds):
             case True, False:
+                if used_context_variables is None:
+                    raise ValueError("No used_context_variables provided, You must provide a names set that contains all the name of the variables used in the speed_expressions."
+                                     "If you do not need use context variables, then you should use *speeds argument to create the MovingState.")
                 self._speeds = None
-                self._speed_expressions: FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern = (
-                    speed_expressions
-                )
+                match speed_expressions:
+                    case (str(full_expression),):
+                        self._speed_expressions = (full_expression, full_expression, full_expression, full_expression)
+                    case (str(left_expression), str(right_expression)):
+                        self._speed_expressions = (left_expression,left_expression, right_expression,right_expression)
+                    case speed_expressions if len(speed_expressions) == 4 and all(isinstance(item, str) for item in speed_expressions):
+                        self._speed_expressions = speed_expressions
+                    case _:
+                        types = tuple(type(item) for item in speed_expressions)
+                        raise ValueError(
+                            f"Invalid Speed Expressions. Must be one of [{FullExpressionPattern},{LRExpressionPattern},{IndividualExpressionPattern}], got {types}"
+                        )
+
             case False, True:
                 self._speed_expressions = None
                 match speeds:
                     case (int(full_speed),):
-                        self._speeds: np.array = np.full((4,), full_speed)
+                        self._speeds = np.full((4,), full_speed)
 
                     case (int(left_speed), int(right_speed)):
                         self._speeds = np.array([left_speed, left_speed, right_speed, right_speed])
-                    case speeds if len(speeds) == 4:
+                    case speeds if len(speeds) == 4 and all(isinstance(item, int) for item in speeds):
                         self._speeds = np.array(speeds)
                     case _:
                         types = tuple(type(item) for item in speeds)
                         raise ValueError(
-                            f"Invalid Speeds. Must be one of [(int,),(int,int),(int,int,int,int)], got {types}"
+                            f"Invalid Speeds. Must be one of [{FullPattern},{LRPattern},{IndividualPattern}], got {types}"
                         )
             case True, True:
                 raise ValueError(
@@ -153,6 +174,12 @@ class MovingState:
                 raise ValueError(
                     f"Must provide either speeds or speed_expressions, got {speeds} and {speed_expressions}"
                 )
+
+        self._used_context_variables: Set[str] = used_context_variables
+        self._before_entering:List[Callable[[], None]] = before_entering
+        self._after_exiting:List[Callable[[], None]] = after_exiting
+        self._identifier:int = self.__state_id_counter__
+        self.__state_id_counter__ += 1
 
     @classmethod
     def halt(cls) -> Self:
@@ -298,6 +325,7 @@ class MovingState:
         return MovingState(
             *tuple(self._speeds),
             speed_expressions=self._speed_expressions,
+            used_context_variables=self._used_context_variables,
             before_entering=self._before_entering,
             after_exiting=self._after_exiting,
         )
