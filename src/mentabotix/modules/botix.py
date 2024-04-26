@@ -367,8 +367,8 @@ class MovingTransition:
                 self.to_states: Dict[KT, MovingState] = {}
             case state if isinstance(state, MovingState):
                 self.to_states: Dict[KT, MovingState] = {__PLACE_HOLDER__: state}
-            case state if isinstance(state, Iterable):
-                self.to_states: Dict[KT, MovingState] = {__PLACE_HOLDER__: to_states}
+            case state if isinstance(state, Dict):
+                self.to_states: Dict[KT, MovingState] = to_states
             case _:
                 raise ValueError(f"Invalid to_states, got {to_states}")
 
