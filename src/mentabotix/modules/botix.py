@@ -22,15 +22,15 @@ from typing import (
 import numpy as np
 from bdmc import CloseLoopController
 
-from ..tools.generators import NameGenerator
 from .exceptions import StructuralError, TokenizeError
+from ..tools.generators import NameGenerator
 
 Expression: TypeAlias = str | int
 
 FullPattern: TypeAlias = Tuple[int]
 LRPattern: TypeAlias = Tuple[int, int]
 IndividualPattern: TypeAlias = Tuple[int, int, int, int]
-FullExpressionPattern: TypeAlias =  str
+FullExpressionPattern: TypeAlias = str
 LRExpressionPattern: TypeAlias = Tuple[Expression, Expression]
 IndividualExpressionPattern: TypeAlias = Tuple[Expression, Expression, Expression, Expression]
 KT = TypeVar("KT", bound=Hashable)
@@ -38,6 +38,7 @@ Context: TypeAlias = Dict[str, Any]
 
 __PLACE_HOLDER__ = "Hello World"
 __CONTROLLER_NAME__ = "con"
+
 
 class MovingState:
     """
@@ -95,6 +96,7 @@ class MovingState:
         :rtype: Optional[List[Callable[[], None]]]
         """
         return self._after_exiting
+
     @property
     def used_context_variables(self) -> Set[str]:
         """
@@ -104,13 +106,12 @@ class MovingState:
         :rtype: Optional[Set[str]]
         """
         return self._used_context_variables
+
     def __init__(
         self,
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
-        speed_expressions: Optional[
-            FullExpressionPattern| LRExpressionPattern | IndividualExpressionPattern
-        ] = None,
-            used_context_variables: Optional[Set[str]] = None,
+        speed_expressions: Optional[FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
+        used_context_variables: Optional[Set[str]] = None,
         before_entering: Optional[List[Callable[[], None]]] = None,
         after_exiting: Optional[List[Callable[[], None]]] = None,
     ) -> None:
@@ -131,26 +132,32 @@ class MovingState:
         Raises:
             ValueError: If the provided speeds do not match any of the above patterns.
         """
-        self._speed_expressions:IndividualExpressionPattern
+        self._speed_expressions: IndividualExpressionPattern
         self._speeds: np.array
 
         match bool(speed_expressions), bool(speeds):
             case True, False:
                 if used_context_variables is None:
-                    raise ValueError("No used_context_variables provided, You must provide a names set that contains all the name of the variables used in the speed_expressions."
-                                     "If you do not need use context variables, then you should use *speeds argument to create the MovingState.")
+                    raise ValueError(
+                        "No used_context_variables provided, You must provide a names set that contains all the name of the variables used in the speed_expressions."
+                        "If you do not need use context variables, then you should use *speeds argument to create the MovingState."
+                    )
                 self._speeds = None
                 match speed_expressions:
                     case str(full_expression):
                         self._speed_expressions = (full_expression, full_expression, full_expression, full_expression)
                     case (left_expression, right_expression):
                         if all(isinstance(item, int) for item in speed_expressions):
-                            raise ValueError(f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}")
+                            raise ValueError(
+                                f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}"
+                            )
 
-                        self._speed_expressions = (left_expression,left_expression, right_expression,right_expression)
+                        self._speed_expressions = (left_expression, left_expression, right_expression, right_expression)
                     case speed_expressions if len(speed_expressions) == 4:
                         if all(isinstance(item, int) for item in speed_expressions):
-                            raise ValueError(f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}")
+                            raise ValueError(
+                                f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}"
+                            )
                         self._speed_expressions = speed_expressions
                     case _:
                         types = tuple(type(item) for item in speed_expressions)
@@ -185,17 +192,21 @@ class MovingState:
 
         if used_context_variables:
             self._validate_used_context_variables_presence(used_context_variables, self._speed_expressions)
-        self._before_entering:List[Callable[[], None]] = before_entering
+        self._before_entering: List[Callable[[], None]] = before_entering
         self._used_context_variables: Set[str] = used_context_variables
-        self._after_exiting:List[Callable[[], None]] = after_exiting
-        self._identifier:int = self.__state_id_counter__
+        self._after_exiting: List[Callable[[], None]] = after_exiting
+        self._identifier: int = self.__state_id_counter__
         self.__state_id_counter__ += 1
+
     @staticmethod
-    def _validate_used_context_variables_presence(used_context_variables: Set[str], speed_expressions: IndividualExpressionPattern) -> None:
+    def _validate_used_context_variables_presence(
+        used_context_variables: Set[str], speed_expressions: IndividualExpressionPattern
+    ) -> None:
         for variable in used_context_variables:
             if any(variable in expression for expression in speed_expressions):
                 continue
             raise ValueError(f"Variable {variable} not found in {speed_expressions}.")
+
     @classmethod
     def halt(cls) -> Self:
         """
@@ -323,7 +334,7 @@ class MovingState:
         self._speeds *= multiplier
         return self
 
-    def unwrap(self) -> Tuple[int,...]:
+    def unwrap(self) -> Tuple[int, ...]:
         """
         Return the speeds of the MovingState object.
         """
@@ -345,7 +356,6 @@ class MovingState:
             after_exiting=self._after_exiting,
         )
 
-
     def tokenize(self, con: Optional[CloseLoopController]) -> Tuple[List[str], Context]:
         """
         Converts the current state into a list of tokens and a context dictionary.
@@ -364,57 +374,63 @@ class MovingState:
         # Check for simultaneous presence or absence of speeds and speed expressions
         if not (bool(self._speeds) ^ bool(self._speed_expressions)):
             if self._speeds:
-                raise TokenizeError(f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}.")
+                raise TokenizeError(
+                    f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}."
+                )
             else:
-                raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds, got {self._speeds} and {self._speed_expressions}.")
+                raise TokenizeError(
+                    f"Cannot tokenize a state with no speed expressions and no speeds, got {self._speeds} and {self._speed_expressions}."
+                )
 
         context: Context = {}  # Initialize the context dictionary
-        context_updater_func_name_generator: NameGenerator = NameGenerator(f'state{self._identifier}_context_updater_')
+        context_updater_func_name_generator: NameGenerator = NameGenerator(f"state{self._identifier}_context_updater_")
 
         # Generate tokens for actions before entering the state
         before_enter_tokens: List[str] = []
         if self._before_entering:
             for func in self._before_entering:
                 context[(func_var_name := context_updater_func_name_generator())] = func
-                before_enter_tokens.append(f'.wait_exec({func_var_name})')
+                before_enter_tokens.append(f".wait_exec({func_var_name})")
 
         # Generate tokens for actions after exiting the state
         after_exiting_tokens: List[str] = []
         if self._after_exiting:
             for func in self._after_exiting:
                 context[(func_var_name := context_updater_func_name_generator())] = func
-                after_exiting_tokens.append(f'.wait_exec({func_var_name})')
+                after_exiting_tokens.append(f".wait_exec({func_var_name})")
 
         state_tokens: List[str] = []
         # Generate tokens based on speed expressions or speeds
         match self._speed_expressions, self._speeds:
             case expression, None:
                 if con is None:
-                    raise TokenizeError(f'You must parse a CloseLoopController to tokenize a state with expression pattern')
+                    raise TokenizeError(
+                        f"You must parse a CloseLoopController to tokenize a state with expression pattern"
+                    )
                 # Create context retrieval functions using expressions
-                context_getter_func_seq = [con.register_context_getter(varname) for varname in self._used_context_variables]
-                getter_function_name_generator = NameGenerator(f'state{self._identifier}_context_getter_')
-                getter_temp_name_generator = NameGenerator(f'state{self._identifier}_context_getter_temp_')
+                context_getter_func_seq = [
+                    con.register_context_getter(varname) for varname in self._used_context_variables
+                ]
+                getter_function_name_generator = NameGenerator(f"state{self._identifier}_context_getter_")
+                getter_temp_name_generator = NameGenerator(f"state{self._identifier}_context_getter_temp_")
                 input_arg_string = str(tuple(expression)).replace("'", "")
                 for varname, fun in zip(self._used_context_variables, context_getter_func_seq):
                     context[(func_var_name := getter_function_name_generator())] = fun
                     temp_name = getter_temp_name_generator()
-                    if input_arg_string.count(varname)==1:
-                        input_arg_string = input_arg_string.replace(varname, f'{func_var_name}()', 1)
+                    if input_arg_string.count(varname) == 1:
+                        input_arg_string = input_arg_string.replace(varname, f"{func_var_name}()", 1)
                     else:
-                        input_arg_string = input_arg_string.replace(varname, f'({temp_name}:={func_var_name}())', 1)
+                        input_arg_string = input_arg_string.replace(varname, f"({temp_name}:={func_var_name}())", 1)
                         input_arg_string = input_arg_string.replace(varname, temp_name)
-                state_tokens.append(f'.set_motors_speed({input_arg_string})')
+                state_tokens.append(f".set_motors_speed({input_arg_string})")
 
             case None, speeds:
-                state_tokens.append(f'.set_motors_speed({tuple(speeds)})')
+                state_tokens.append(f".set_motors_speed({tuple(speeds)})")
             case _:
                 raise RuntimeError("should never reach here")
 
         tokens: List[str] = before_enter_tokens + state_tokens + after_exiting_tokens
         return tokens, context
-
-
 
     def __hash__(self) -> int:
         return self._identifier
@@ -433,24 +449,40 @@ class MovingTransition:
     Features multiple branches and a breaker function to determine if the transition should be broken.
     """
 
+    __state_id_counter__: ClassVar[int] = 0
+
+    @property
+    def identifier(self) -> int:
+        return self._transition_id
+
     def __init__(
         self,
         duration: float,
         breaker: Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]] = None,
+        check_interval: Optional[float] = 0.01,
         from_states: Optional[Iterable[MovingState] | MovingState] = None,
         to_states: Optional[Dict[KT, MovingState] | MovingState] = None,
     ):
         """
-        Initializes a new instance of the class.
+        Initialize a new instance of the MovingTransition class.
 
         Args:
-            duration (float): The duration of the moving transform.
-            breaker (Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]]): The breaker function to determine if the transition should be broken. Defaults to None.
-            from_states (Optional[Iterable[MovingState]|MovingState]): The states the moving transform is transitioning from. Defaults to None.
-            to_states (Optional[Dict[KT, MovingState]|MovingState]): The states the moving transform is transitioning to. Defaults to None.
+            duration (float): The duration of the transition in seconds. Must be positive.
+            breaker (Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]]): A function that determines
+                whether the transition should be broken. If None, no breaker function is used. Must have an annotated
+                return type.
+            check_interval (Optional[float]): The interval in seconds at which the breaker function should be checked.
+                Defaults to 0.01 seconds.
+            from_states (Optional[Iterable[MovingState] | MovingState]): The states that the transition originates from.
+                Can be a single state or an iterable of states. Defaults to None.
+            to_states (Optional[Dict[KT, MovingState] | MovingState]): The states that the transition leads to. Can be a
+                single state or a dictionary mapping keys to states. Defaults to None.
 
         Raises:
-            ValueError: If duration is non-positive or if breaker has an empty annotated return type.
+            ValueError: If duration is not positive or if breaker has an empty return type annotation.
+            ValueError: If from_states is not None, a MovingState object, or an iterable of MovingState objects.
+            ValueError: If to_states is not None, a MovingState object, a dictionary mapping keys to MovingState objects,
+                or None.
 
         Returns:
             None
@@ -462,6 +494,7 @@ class MovingTransition:
 
         self.duration: float = duration
         self.breaker: Optional[Callable[[], Any]] = breaker
+        self.check_interval: float = check_interval
         match from_states:
             case None:
                 self.from_states: List[MovingState] = []
@@ -481,6 +514,9 @@ class MovingTransition:
                 self.to_states: Dict[KT, MovingState] = to_states
             case _:
                 raise ValueError(f"Invalid to_states, got {to_states}")
+
+        self._transition_id: int = MovingTransition.__state_id_counter__
+        MovingTransition.__state_id_counter__ += 1
 
     def add_from_state(self, state: MovingState) -> Self:
         """
@@ -509,11 +545,48 @@ class MovingTransition:
         self.to_states[key] = state
         return self
 
-    def tokenize(self)->str:
+    def tokenize(self) -> Tuple[List[str], Context]:
+        """
+        Tokenizes the current object and returns a tuple of tokens and context.
 
+        Returns:
+            Tuple[List[str], Context]: A tuple containing a list of tokens and a context dictionary.
+        """
+        tokens: List[str] = []
+        context: Context = {}
+        name_generator: NameGenerator = NameGenerator(f"transition{self._transition_id}_breaker_")
+        context[(breaker_name := name_generator())] = self.breaker
+        match len(self.to_states):
+            case 0:
+                raise TokenizeError(f"Transition must have at least one to_state, got {self.to_states}.")
+            case 1 if not callable(self.breaker):
+                tokens.append(f".delay({self.duration})")
+            case 1 if callable(self.breaker):
+                tokens.append(f".delay_b({self.duration},{breaker_name},{self.check_interval})")
+            case length if length > 1 and callable(self.breaker):
+                tokens.append(f".delay_b_match({self.duration},{breaker_name},{self.check_interval})")
+        return tokens, context
+
+    def clone(self) -> Self:
+        """
+        Clones the current `MovingTransition` object and returns a new instance with the same values.
+
+        Returns:
+            Self: A new `MovingTransition` object with the same values as the current object.
+        """
+        return MovingTransition(
+            self.duration,
+            self.breaker,
+            self.check_interval,
+            self.from_states,
+            self.to_states,
+        )
 
     def __str__(self):
         return f"{self.from_states} -> {self.to_states}"
+
+    def __hash__(self):
+        return self._transition_id
 
 
 TokenPool: TypeAlias = List[MovingTransition]
@@ -626,8 +699,8 @@ class Botix:
                     connected_states.update(token.to_states.values())
 
             # Update the set of not accessible states by removing the states we just found to be connected
-            not_accessible_states -= (connected_states-visited_states)
-            visited_states+=connected_states
+            not_accessible_states -= connected_states - visited_states
+            visited_states += connected_states
             # If there are no more not accessible states, we are done
             if len(not_accessible_states):
                 return
@@ -704,7 +777,7 @@ class Botix:
     ) -> str:
 
         if start_state == end_state:
-            #TODO fill the one state case
+            pass
         self.ensure_accessibility(self.token_pool, start_state, {end_state})
         chain_elements: List[MovingState | MovingTransition] = [start_state]
         while True:
