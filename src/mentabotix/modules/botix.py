@@ -346,52 +346,74 @@ class MovingState:
         )
 
 
-    def tokenize(self,con:Optional[CloseLoopController])->Tuple[List[str],Context]:
+    def tokenize(self, con: Optional[CloseLoopController]) -> Tuple[List[str], Context]:
+        """
+        Converts the current state into a list of tokens and a context dictionary.
+
+        Parameters:
+        - con: Optional[CloseLoopController] - The closed-loop controller required if speed expressions exist.
+
+        Returns:
+        - Tuple[List[str], Context]: A tuple containing the list of tokens and the context dictionary.
+
+        Raises:
+        - TokenizeError: If the state contains both speeds and speed expressions, or neither.
+        - RuntimeError: If an internal logic error occurs; this state should理论上 never be reached.
+        """
+
+        # Check for simultaneous presence or absence of speeds and speed expressions
         if not (bool(self._speeds) ^ bool(self._speed_expressions)):
             if self._speeds:
                 raise TokenizeError(f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}.")
             else:
                 raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds, got {self._speeds} and {self._speed_expressions}.")
 
-        context: Context = {}
-        context_updater_func_name_generator:NameGenerator=NameGenerator(f'state{self._identifier}_context_updater_')
+        context: Context = {}  # Initialize the context dictionary
+        context_updater_func_name_generator: NameGenerator = NameGenerator(f'state{self._identifier}_context_updater_')
 
-        before_enter_tokens:List[str]=[]
+        # Generate tokens for actions before entering the state
+        before_enter_tokens: List[str] = []
         if self._before_entering:
             for func in self._before_entering:
-                context[(func_var_name:=context_updater_func_name_generator())]=func
+                context[(func_var_name := context_updater_func_name_generator())] = func
                 before_enter_tokens.append(f'.wait_exec({func_var_name})')
 
-        after_exiting_tokens:List[str]=[]
+        # Generate tokens for actions after exiting the state
+        after_exiting_tokens: List[str] = []
         if self._after_exiting:
             for func in self._after_exiting:
-                context[(func_var_name:=context_updater_func_name_generator())]=func
+                context[(func_var_name := context_updater_func_name_generator())] = func
                 after_exiting_tokens.append(f'.wait_exec({func_var_name})')
 
-        state_tokens:List[str]=[]
-        match self._speed_expressions,self._speeds:
-            case expression,None:
+        state_tokens: List[str] = []
+        # Generate tokens based on speed expressions or speeds
+        match self._speed_expressions, self._speeds:
+            case expression, None:
                 if con is None:
-                    raise  TokenizeError(f'You must parse a CloseLoopController to tokenize a state with expression pattern')
-                # use expression to construct context getters
-                context_getter_func_seq=[con.register_context_getter(varname) for varname in self._used_context_variables]
-                getter_function_name_generator=NameGenerator(f'state{self._identifier}_context_getter_')
-                getter_temp_name_generator=NameGenerator(f'state{self._identifier}_context_getter_temp_')
-                input_arg_string=str(tuple(expression)).replace("'","")
-                for varname,fun in zip(self._used_context_variables,context_getter_func_seq):
-                    context[(func_var_name:=getter_function_name_generator())]=fun
-                    temp_name=getter_temp_name_generator()
-                    input_arg_string=input_arg_string.replace(varname,f'({temp_name}:={func_var_name}())',1)
-                    input_arg_string=input_arg_string.replace(varname,temp_name)
+                    raise TokenizeError(f'You must parse a CloseLoopController to tokenize a state with expression pattern')
+                # Create context retrieval functions using expressions
+                context_getter_func_seq = [con.register_context_getter(varname) for varname in self._used_context_variables]
+                getter_function_name_generator = NameGenerator(f'state{self._identifier}_context_getter_')
+                getter_temp_name_generator = NameGenerator(f'state{self._identifier}_context_getter_temp_')
+                input_arg_string = str(tuple(expression)).replace("'", "")
+                for varname, fun in zip(self._used_context_variables, context_getter_func_seq):
+                    context[(func_var_name := getter_function_name_generator())] = fun
+                    temp_name = getter_temp_name_generator()
+                    if input_arg_string.count(varname)==1:
+                        input_arg_string = input_arg_string.replace(varname, f'{func_var_name}()', 1)
+                    else:
+                        input_arg_string = input_arg_string.replace(varname, f'({temp_name}:={func_var_name}())', 1)
+                        input_arg_string = input_arg_string.replace(varname, temp_name)
                 state_tokens.append(f'.set_motors_speed({input_arg_string})')
 
-
-            case None,speeds:
+            case None, speeds:
                 state_tokens.append(f'.set_motors_speed({tuple(speeds)})')
             case _:
                 raise RuntimeError("should never reach here")
+
         tokens: List[str] = before_enter_tokens + state_tokens + after_exiting_tokens
-        return tokens,context
+        return tokens, context
+
 
 
     def __hash__(self) -> int:
@@ -487,8 +509,8 @@ class MovingTransition:
         self.to_states[key] = state
         return self
 
-    def make(self)->str:
-        #TODO
+    def tokenize(self)->str:
+
 
     def __str__(self):
         return f"{self.from_states} -> {self.to_states}"
