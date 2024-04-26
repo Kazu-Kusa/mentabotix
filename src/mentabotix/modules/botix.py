@@ -22,6 +22,7 @@ from typing import (
 import numpy as np
 from bdmc import CloseLoopController
 
+from ..tools.generators import NameGenerator
 from .exceptions import StructuralError, TokenizeError
 
 Expression: TypeAlias = str | int
@@ -352,31 +353,44 @@ class MovingState:
             else:
                 raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds, got {self._speeds} and {self._speed_expressions}.")
 
-        tokens: List[str] = []
         context: Context = {}
-        string_template:str=f'stateVar{self._identifier}_'
-        add_up=0
+        context_updater_func_name_generator:NameGenerator=NameGenerator(f'state{self._identifier}_context_updater_')
+
+        before_enter_tokens:List[str]=[]
         if self._before_entering:
             for func in self._before_entering:
-                context[(var_name:=string_template+str(add_up))]=func
-                tokens.append(f'.wait_exec({var_name})')
-                add_up+=1
+                context[(func_var_name:=context_updater_func_name_generator())]=func
+                before_enter_tokens.append(f'.wait_exec({func_var_name})')
 
+        after_exiting_tokens:List[str]=[]
+        if self._after_exiting:
+            for func in self._after_exiting:
+                context[(func_var_name:=context_updater_func_name_generator())]=func
+                after_exiting_tokens.append(f'.wait_exec({func_var_name})')
+
+        state_tokens:List[str]=[]
         match self._speed_expressions,self._speeds:
             case expression,None:
                 if con is None:
                     raise  TokenizeError(f'You must parse a CloseLoopController to tokenize a state with expression pattern')
-                # use expression to construct context
-                func_temp_seq=[con.register_context_getter(varname) for varname in self._used_context_variables]
-                for func in func_temp_seq:
-                    context[(var_name:=string_template+str(add_up))]=func
-                    tokens.append(f'.set_motors_speed()')
-                    add_up+=1
+                # use expression to construct context getters
+                context_getter_func_seq=[con.register_context_getter(varname) for varname in self._used_context_variables]
+                getter_function_name_generator=NameGenerator(f'state{self._identifier}_context_getter_')
+                getter_temp_name_generator=NameGenerator(f'state{self._identifier}_context_getter_temp_')
+                input_arg_string=str(tuple(expression)).replace("'","")
+                for varname,fun in zip(self._used_context_variables,context_getter_func_seq):
+                    context[(func_var_name:=getter_function_name_generator())]=fun
+                    temp_name=getter_temp_name_generator()
+                    input_arg_string=input_arg_string.replace(varname,f'({temp_name}:={func_var_name}())',1)
+                    input_arg_string=input_arg_string.replace(varname,temp_name)
+                state_tokens.append(f'.set_motors_speed({input_arg_string})')
+
 
             case None,speeds:
-                pass
+                state_tokens.append(f'.set_motors_speed({tuple(speeds)})')
             case _:
                 raise RuntimeError("should never reach here")
+        tokens: List[str] = before_enter_tokens + state_tokens + after_exiting_tokens
         return tokens,context
 
 
@@ -576,25 +590,25 @@ class Botix:
         # Initialize a queue for BFS and a set to keep track of states not accessible from the start state
         search_queue: List[MovingState] = [start_state]
         not_accessible_states: Set[MovingState] = end_states
-
+        visited_states: Set[MovingState] = set()
         # Perform breadth-first search to find if all end states are accessible
         while search_queue:
             # Pop the next state from the queue to explore
             current_state: MovingState = search_queue.pop(0)
-            connected_states: List[MovingState] = []
+            connected_states: Set[MovingState] = []
 
             # Explore all tokens that can be reached from the current state
             for token in token_pool:
                 if current_state in token.from_states:
                     # Add all to_states of the current token to the connected states list
-                    connected_states.extend(token.to_states.values())
+                    connected_states.update(token.to_states.values())
 
             # Update the set of not accessible states by removing the states we just found to be connected
-            not_accessible_states -= set(connected_states)
-
+            not_accessible_states -= (connected_states-visited_states)
+            visited_states+=connected_states
             # If there are no more not accessible states, we are done
-            if not_accessible_states == set():
-                break
+            if len(not_accessible_states):
+                return
 
         # If there are still states marked as not accessible, raise an exception
         if not_accessible_states:
