@@ -22,16 +22,18 @@ from typing import (
 import numpy as np
 from bdmc import CloseLoopController
 
-from .exceptions import StructuralError
+from .exceptions import StructuralError, TokenizeError
+
+Expression: TypeAlias = str | int
 
 FullPattern: TypeAlias = Tuple[int]
 LRPattern: TypeAlias = Tuple[int, int]
 IndividualPattern: TypeAlias = Tuple[int, int, int, int]
-FullExpressionPattern: TypeAlias = Tuple[str]
-LRExpressionPattern: TypeAlias = Tuple[str, str]
-IndividualExpressionPattern: TypeAlias = Tuple[str, str, str, str]
+FullExpressionPattern: TypeAlias =  str
+LRExpressionPattern: TypeAlias = Tuple[Expression, Expression]
+IndividualExpressionPattern: TypeAlias = Tuple[Expression, Expression, Expression, Expression]
 KT = TypeVar("KT", bound=Hashable)
-
+Context: TypeAlias = Dict[str, Any]
 
 __PLACE_HOLDER__ = "Hello World"
 __CONTROLLER_NAME__ = "con"
@@ -42,7 +44,7 @@ class MovingState:
     Include:
     - halt: make a stop state,all wheels stop moving
     - straight: make a straight moving state,all wheels move in the same direction,same speed
-    - turn: make a turning state,left and right wheels turn in in different direction,same speed
+    - turn: make a turning state,left and right wheels turn in different direction,same speed
     - differential: make a differential state,all wheels move in the same direction,different speed
     - drift: make a drift state,all wheels except for a specific one drift in the same direction, specific speed
 
@@ -138,11 +140,16 @@ class MovingState:
                                      "If you do not need use context variables, then you should use *speeds argument to create the MovingState.")
                 self._speeds = None
                 match speed_expressions:
-                    case (str(full_expression),):
+                    case str(full_expression):
                         self._speed_expressions = (full_expression, full_expression, full_expression, full_expression)
-                    case (str(left_expression), str(right_expression)):
+                    case (left_expression, right_expression):
+                        if all(isinstance(item, int) for item in speed_expressions):
+                            raise ValueError(f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}")
+
                         self._speed_expressions = (left_expression,left_expression, right_expression,right_expression)
-                    case speed_expressions if len(speed_expressions) == 4 and all(isinstance(item, str) for item in speed_expressions):
+                    case speed_expressions if len(speed_expressions) == 4:
+                        if all(isinstance(item, int) for item in speed_expressions):
+                            raise ValueError(f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}")
                         self._speed_expressions = speed_expressions
                     case _:
                         types = tuple(type(item) for item in speed_expressions)
@@ -175,12 +182,19 @@ class MovingState:
                     f"Must provide either speeds or speed_expressions, got {speeds} and {speed_expressions}"
                 )
 
-        self._used_context_variables: Set[str] = used_context_variables
+        if used_context_variables:
+            self._validate_used_context_variables_presence(used_context_variables, self._speed_expressions)
         self._before_entering:List[Callable[[], None]] = before_entering
+        self._used_context_variables: Set[str] = used_context_variables
         self._after_exiting:List[Callable[[], None]] = after_exiting
         self._identifier:int = self.__state_id_counter__
         self.__state_id_counter__ += 1
-
+    @staticmethod
+    def _validate_used_context_variables_presence(used_context_variables: Set[str], speed_expressions: IndividualExpressionPattern) -> None:
+        for variable in used_context_variables:
+            if any(variable in expression for expression in speed_expressions):
+                continue
+            raise ValueError(f"Variable {variable} not found in {speed_expressions}.")
     @classmethod
     def halt(cls) -> Self:
         """
@@ -331,8 +345,40 @@ class MovingState:
         )
 
 
-    def make(self)->str:
-        #TODO
+    def tokenize(self,con:Optional[CloseLoopController])->Tuple[List[str],Context]:
+        if not (bool(self._speeds) ^ bool(self._speed_expressions)):
+            if self._speeds:
+                raise TokenizeError(f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}.")
+            else:
+                raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds, got {self._speeds} and {self._speed_expressions}.")
+
+        tokens: List[str] = []
+        context: Context = {}
+        string_template:str=f'stateVar{self._identifier}_'
+        add_up=0
+        if self._before_entering:
+            for func in self._before_entering:
+                context[(var_name:=string_template+str(add_up))]=func
+                tokens.append(f'.wait_exec({var_name})')
+                add_up+=1
+
+        match self._speed_expressions,self._speeds:
+            case expression,None:
+                if con is None:
+                    raise  TokenizeError(f'You must parse a CloseLoopController to tokenize a state with expression pattern')
+                # use expression to construct context
+                func_temp_seq=[con.register_context_getter(varname) for varname in self._used_context_variables]
+                for func in func_temp_seq:
+                    context[(var_name:=string_template+str(add_up))]=func
+                    tokens.append(f'.set_motors_speed()')
+                    add_up+=1
+
+            case None,speeds:
+                pass
+            case _:
+                raise RuntimeError("should never reach here")
+        return tokens,context
+
 
     def __hash__(self) -> int:
         return self._identifier
