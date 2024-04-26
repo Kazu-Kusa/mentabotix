@@ -107,6 +107,16 @@ class MovingState:
         """
         return self._used_context_variables
 
+    @property
+    def speed_expressions(self) -> IndividualExpressionPattern:
+        """
+        Get the speed expressions of the object.
+
+        :return: The speed expressions of the object.
+        :rtype: IndividualExpressionPattern
+        """
+        return self._speed_expressions
+
     def __init__(
         self,
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
@@ -195,8 +205,8 @@ class MovingState:
         self._before_entering: List[Callable[[], None]] = before_entering
         self._used_context_variables: Set[str] = used_context_variables
         self._after_exiting: List[Callable[[], None]] = after_exiting
-        self._identifier: int = self.__state_id_counter__
-        self.__state_id_counter__ += 1
+        self._identifier: int = MovingState.__state_id_counter__
+        MovingState.__state_id_counter__ += 1
 
     @staticmethod
     def _validate_used_context_variables_presence(
@@ -315,9 +325,9 @@ class MovingState:
             case "rl":
                 return cls(speed, 0, speed, int(speed * cls.Config.diagonal_multiplier))
             case "rr":
-                return cls(speed * cls.Config.diagonal_multiplier, speed, 0, speed)
+                return cls(int(speed * cls.Config.diagonal_multiplier), speed, 0, speed)
             case "fr":
-                return cls(speed, speed * cls.Config.diagonal_multiplier, speed, 0)
+                return cls(speed, int(speed * cls.Config.diagonal_multiplier), speed, 0)
             case _:
                 raise ValueError("Invalid Direction. Must be one of ['fl','rl','rr','fr']")
 
@@ -331,7 +341,7 @@ class MovingState:
         Returns:
             Self: The modified object with the updated speeds.
         """
-        self._speeds *= multiplier
+        self._speeds = (self._speeds * multiplier).astype(np.int32)
         return self
 
     def unwrap(self) -> Tuple[int, ...]:
@@ -349,7 +359,7 @@ class MovingState:
         """
 
         return MovingState(
-            *tuple(self._speeds),
+            *tuple(self._speeds.tolist()),
             speed_expressions=self._speed_expressions,
             used_context_variables=self._used_context_variables,
             before_entering=self._before_entering,
@@ -372,15 +382,13 @@ class MovingState:
         """
 
         # Check for simultaneous presence or absence of speeds and speed expressions
-        if not (bool(self._speeds) ^ bool(self._speed_expressions)):
-            if self._speeds:
-                raise TokenizeError(
-                    f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}."
-                )
-            else:
-                raise TokenizeError(
-                    f"Cannot tokenize a state with no speed expressions and no speeds, got {self._speeds} and {self._speed_expressions}."
-                )
+
+        if self._speeds is not None and self._speed_expressions:
+            raise TokenizeError(
+                f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}."
+            )
+        elif self._speeds is None and self._speed_expressions is None:
+            raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds.")
 
         context: Context = {}  # Initialize the context dictionary
         context_updater_func_name_generator: NameGenerator = NameGenerator(f"state{self._identifier}_context_updater_")
@@ -407,20 +415,21 @@ class MovingState:
                     raise TokenizeError(
                         f"You must parse a CloseLoopController to tokenize a state with expression pattern"
                     )
-                # Create context retrieval functions using expressions
-                context_getter_func_seq = [
-                    con.register_context_getter(varname) for varname in self._used_context_variables
-                ]
+
                 getter_function_name_generator = NameGenerator(f"state{self._identifier}_context_getter_")
                 getter_temp_name_generator = NameGenerator(f"state{self._identifier}_context_getter_temp_")
                 input_arg_string = str(tuple(expression)).replace("'", "")
-                for varname, fun in zip(self._used_context_variables, context_getter_func_seq):
-                    context[(func_var_name := getter_function_name_generator())] = fun
+                for varname in self._used_context_variables:
+                    # Create context retrieval functions using expressions
+                    fn: Callable[[], Any] = con.register_context_getter(varname)
+                    context[(getter_func_var_name := getter_function_name_generator())] = fn
                     temp_name = getter_temp_name_generator()
                     if input_arg_string.count(varname) == 1:
-                        input_arg_string = input_arg_string.replace(varname, f"{func_var_name}()", 1)
+                        input_arg_string = input_arg_string.replace(varname, f"{getter_func_var_name}()", 1)
                     else:
-                        input_arg_string = input_arg_string.replace(varname, f"({temp_name}:={func_var_name}())", 1)
+                        input_arg_string = input_arg_string.replace(
+                            varname, f"({temp_name}:={getter_func_var_name}())", 1
+                        )
                         input_arg_string = input_arg_string.replace(varname, temp_name)
                 state_tokens.append(f".set_motors_speed({input_arg_string})")
 
@@ -439,7 +448,7 @@ class MovingState:
         return tuple(self._speeds) == tuple(other._speeds) and self._speed_expressions == other._speed_expressions
 
     def __str__(self):
-        return f"{self._identifier}-MovingState({self._speeds or self._speed_expressions})"
+        return f"{self._identifier}-MovingState{self._speed_expressions or (tuple(self._speeds) if self._speeds is not None else None)}"
 
 
 class MovingTransition:
