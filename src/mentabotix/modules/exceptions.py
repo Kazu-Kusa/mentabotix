@@ -12,3 +12,7 @@ class SamplerTypeError(Exception):
 
 class StructuralError(Exception):
     pass
+
+
+class TokenizeError(Exception):
+    pass
