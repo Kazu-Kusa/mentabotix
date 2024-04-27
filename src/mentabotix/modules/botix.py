@@ -1,6 +1,7 @@
 from collections import Counter
 from dataclasses import dataclass
 from inspect import signature, Signature
+from itertools import zip_longest
 from typing import (
     Tuple,
     TypeAlias,
@@ -17,10 +18,12 @@ from typing import (
     List,
     ClassVar,
     Set,
+    Sequence,
 )
 
 import numpy as np
 from bdmc import CloseLoopController
+from terminaltables import SingleTable
 
 from .exceptions import StructuralError, TokenizeError
 from ..tools.generators import NameGenerator
@@ -469,7 +472,7 @@ class MovingTransition:
         duration: float,
         breaker: Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]] = None,
         check_interval: Optional[float] = 0.01,
-        from_states: Optional[Iterable[MovingState] | MovingState] = None,
+        from_states: Optional[Sequence[MovingState] | MovingState] = None,
         to_states: Optional[Dict[KT, MovingState] | MovingState] = None,
     ):
         """
@@ -509,7 +512,7 @@ class MovingTransition:
                 self.from_states: List[MovingState] = []
             case state if isinstance(state, MovingState):
                 self.from_states: List[MovingState] = [from_states]
-            case state if isinstance(state, Iterable):
+            case state if isinstance(state, Sequence) and all(isinstance(s, MovingState) for s in state):
                 self.from_states: List[MovingState] = list(from_states)
             case _:
                 raise ValueError(f"Invalid from_states, got {from_states}")
@@ -592,7 +595,10 @@ class MovingTransition:
         )
 
     def __str__(self):
-        return f"{self.from_states} -> {self.to_states}"
+        temp = [["From", "To"]]
+        for from_state, to_state in zip_longest(self.from_states, self.to_states.values()):
+            temp.append([str(from_state) if from_state else "", str(to_state) if to_state else ""])
+        return SingleTable(temp).table
 
     def __hash__(self):
         return self._transition_id
