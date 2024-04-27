@@ -55,14 +55,14 @@ class TagDetector:
     use cam to detect apriltags
     """
 
-    options = Detector(
+    detector = Detector(
         families="tag36h11",
         nthreads=2,
         quad_decimate=1.0,
         refine_edges=False,
         debug=False,
     )
-    __tag_detect = Detector(options).detect
+    __tag_detect = detector.detect
 
     def __init__(
         self,
