@@ -614,7 +614,7 @@ class Botix:
         self.token_pool: TokenPool = token_pool or []
 
     @staticmethod
-    def ensure_unique_start(token_pool: TokenPool) -> MovingState:
+    def acquire_unique_start(token_pool: TokenPool) -> MovingState:
         """
         Calculates the indegree of each state in the token pool to ensure unique starting states.
 
@@ -649,7 +649,7 @@ class Botix:
             raise ValueError(f"There must be exactly one state with a zero indegree, got {zero_indegree_states}")
 
     @staticmethod
-    def ensure_end_state(token_pool: TokenPool) -> Set[MovingState]:
+    def acquire_end_state(token_pool: TokenPool) -> Set[MovingState]:
         """
         Calculates the end states of the given token pool.
 
@@ -696,6 +696,11 @@ class Botix:
 
         Returns:
             None
+
+        Note:
+            The structure validity of the token pool does not affect the accessibility check,
+            So, if the token pool is not structurally valid, this method will still complete the check.
+            FIXME: This should be fixed in the future.
         """
         # Initialize a queue for BFS and a set to keep track of states not accessible from the start state
         search_queue: List[MovingState] = [start_state]
@@ -705,7 +710,7 @@ class Botix:
         while search_queue:
             # Pop the next state from the queue to explore
             current_state: MovingState = search_queue.pop(0)
-            connected_states: Set[MovingState] = []
+            connected_states: Set[MovingState] = set()
 
             # Explore all tokens that can be reached from the current state
             for token in token_pool:
@@ -768,45 +773,166 @@ class Botix:
         # Raise StructuralError with the prepared message
         raise StructuralError(std_err)
 
+    def acquire_loops(self) -> List[List[MovingState]]:
+        """
+        Retrieves a list of all looping paths, where each path is composed of a series of MovingState instances.
+
+        Returns:
+            List[List[MovingState]]: A list containing all looping paths, with each path being a list of MovingState objects.
+        """
+
+        # Initialize the starting state, search stack, and list for storing loops.
+        start_state: MovingState = self.acquire_unique_start(self.token_pool)
+        search_stack: List[MovingState] = [start_state]
+        loops: List[List[MovingState]] = []
+
+        # Initialize the chain (current path), dictionary to track branching depths, and a rollback flag.
+        chain: List[MovingState] = []
+        branch_dict: Dict[MovingState, int] = {}
+        rolling_back: bool = False
+
+        # Iterate until the search stack is empty.
+        while search_stack:
+            # Pop the current state from the stack and find its connected transitions.
+            cur_state: MovingState = search_stack.pop()
+            connected_transition: MovingTransition = self.acquire_connected_forward_transition(
+                cur_state, none_check=False
+            )
+            connected_states = list(connected_transition.to_states.values())
+
+            if rolling_back:
+                # Handle rollback logic, deciding the next step based on the current depth in the branch dictionary.
+                if connected_transition is None:
+                    raise ValueError("Should not arrive here")
+                cur_depth_index: int = branch_dict.get(cur_state)
+                if cur_depth_index == len(connected_transition.to_states):
+                    search_stack.append(chain.pop())
+                else:
+                    search_stack.append(connected_states[cur_depth_index])
+                    branch_dict[cur_state] = cur_depth_index + 1
+            else:
+                # Handle regular search logic, progressing based on connectivity and branching conditions.
+                if connected_transition is None:
+                    rolling_back = True
+                    search_stack.append(chain.pop())
+                    continue
+                else:
+                    cur_depth_index: int = branch_dict.get(cur_state, 0)
+                    branch_dict[cur_state] = cur_depth_index + 1
+                    if cur_depth_index == (branch_count := len(connected_states)):
+                        rolling_back = True
+                        search_stack.append(chain.pop())
+                        continue
+                    else:
+                        next_state = connected_states[cur_depth_index]
+                        if next_state in chain:
+                            # Upon detecting a loop, append the loop path to the loops list.
+                            loops.append(chain[chain.index(next_state) :])
+                            rolling_back = True
+                            continue
+                        else:
+                            # Add the current state to the chain and push the next state onto the search stack.
+                            chain.append(cur_state)
+                            search_stack.append(next_state)
+        return loops
+
+    def is_branchless_chain(self, start_state: MovingState, end_state: MovingState) -> bool:
+        """
+        Check if the given start state and end state form a branchless chain in the token pool.
+
+        This function ensures the structure validity of the token pool and checks the accessibility of the start state and end state.
+        It then performs a breadth-first search to check if there is a path from the start state to the end state in the token pool.
+        A branchless chain is defined as a path where each state has only one outgoing transition.
+
+        Parameters:
+            start_state (MovingState): The starting state of the chain.
+            end_state (MovingState): The end state of the chain.
+
+        Returns:
+            bool: True if the start state and end state form a branchless chain, False otherwise.
+        """
+        self.ensure_structure_validity(self.token_pool)
+        self.ensure_accessibility(self.token_pool, start_state, {end_state})
+
+        search_queue = [start_state]
+        while search_queue:
+            cur_state = search_queue.pop(0)
+            connected_transitions: MovingTransition = self.acquire_connected_forward_transition(cur_state)
+
+            match len(connected_transitions.to_states):
+                case 1:
+                    search_queue.append(list(connected_transitions.to_states.values())[0])
+                case _:
+                    return False
+            if search_queue[-1] == end_state:
+                return True
+
+    def acquire_connected_forward_transition(
+        self, state: MovingState, none_check: bool = True
+    ) -> MovingTransition | None:
+        """
+        Returns the MovingTransition object that is connected to the given MovingState object in the token pool.
+
+        This function takes in a MovingState object and checks if it is connected to any forward transition in the token pool. It filters the token pool based on the from_states attribute of each transition and returns the first matching MovingTransition object. If none_check is True and no matching transition is found, a ValueError is raised. If none_check is False and no matching transition is found, None is returned. If multiple matching transitions are found, a ValueError is raised.
+
+        Parameters:
+            state (MovingState): The MovingState object to search for connected forward transitions.
+            none_check (bool, optional): Whether to raise a ValueError if no matching transition is found. Defaults to True.
+
+        Returns:
+            MovingTransition | None: The MovingTransition object that is connected to the given MovingState object, or None if none_check is False and no matching transition is found.
+
+        Raises:
+            ValueError: If no matching transition is found and none_check is True, or if multiple matching transitions are found.
+        """
+        response = list(filter(lambda trans: state in trans.from_states, self.token_pool))
+        match len(response):
+            case 0:
+                if none_check:
+                    raise ValueError(f"the state of {state} is not connected to any forward transition!")
+                return None
+            case 1:
+                return response[0]
+            case _:
+                raise ValueError(f"A state can *ONLY* connect to ONE transition as its input. Found {response}")
+
+    def acquire_connected_backward_transition(
+        self, state: MovingState, none_check: bool = True
+    ) -> MovingTransition | List[MovingTransition] | None:
+        """
+        Returns the MovingTransition object or a list of MovingTransition objects that are connected to the given MovingState object in the token pool.
+
+        This function takes in a MovingState object and checks if it is connected to any backward transition in the token pool. It filters the token pool based on the to_states attribute of each transition and returns the matching MovingTransition object(s). If none_check is True and no matching transition is found, a ValueError is raised. If none_check is False and no matching transition is found, None is returned. If multiple matching transitions are found, a list of the matching MovingTransition objects is returned.
+
+        Parameters:
+            state (MovingState): The MovingState object to search for connected backward transitions.
+            none_check (bool, optional): Whether to raise a ValueError if no matching transition is found. Defaults to True.
+
+        Returns:
+            MovingTransition | List[MovingTransition] | None: The MovingTransition object or a list of MovingTransition objects that are connected to the given MovingState object, or None if none_check is False and no matching transition is found.
+
+        Raises:
+            ValueError: If no matching transition is found and none_check is True, or if multiple matching transitions are found.
+        """
+        response = list(filter(lambda trans: state in trans.to_states.values(), self.token_pool))
+        match len(response):
+            case 0:
+                if none_check:
+                    raise ValueError(f"the state of {state} is not connected to any backward transition!")
+                return None
+            case 1:
+                return response[0]
+            case _:
+                return response
+
     def _check_met_requirements(self):
         self.ensure_structure_validity(self.token_pool)
-        start_state = self.ensure_unique_start(self.token_pool)
-        end_states = self.ensure_end_state(self.token_pool)
+        start_state = self.acquire_unique_start(self.token_pool)
+        end_states = self.acquire_end_state(self.token_pool)
         self.ensure_accessibility(self.token_pool, start_state, end_states)
 
     def compile(self) -> Callable:
-        """
-
-        Returns:
-
-        """
-        function_context: Dict[str, Any] = {"con": self.controller}
-
-        self._check_met_requirements()
-        function_string: str = f"def _func():\n" f" con"
-
-        return
-
-    def _make_chain_expression(
-        self, start_state: MovingState, end_state: MovingState, controller_name: str = "con"
-    ) -> str:
-
-        if start_state == end_state:
-            pass
-        self.ensure_accessibility(self.token_pool, start_state, {end_state})
-        chain_elements: List[MovingState | MovingTransition] = [start_state]
-        while True:
-            current_state = chain_elements[-1]
-            connected_transitions: List[MovingTransition] = list(
-                filter(lambda trans: current_state in trans.from_states, self.token_pool)
-            )
-            if len(connected_transitions) > 1:
-                raise StructuralError(
-                    f"{current_state} is the input of more than one transition, which is not allowed.\n"
-                    f"you can check the structure of the token pool using self.ensure_structure_validity method."
-                )
-            if len(connected_transitions) == 0:
-                raise StructuralError(f"{current_state} is a terminate")
+        raise NotImplementedError
 
 
 if __name__ == "__main__":
