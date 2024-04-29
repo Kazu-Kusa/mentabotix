@@ -453,6 +453,9 @@ class MovingState:
     def __str__(self):
         return f"{self._identifier}-MovingState{self._speed_expressions or (tuple(self._speeds) if self._speeds is not None else None)}"
 
+    def __repr__(self):
+        return str(self)
+
 
 class MovingTransition:
     """
@@ -600,6 +603,9 @@ class MovingTransition:
             temp.append([str(from_state) if from_state else "", str(to_state) if to_state else ""])
         return SingleTable(temp).table
 
+    def __repr__(self):
+        return f"{self.from_states} => {list(self.to_states.values())}"
+
     def __hash__(self):
         return self._transition_id
 
@@ -614,39 +620,40 @@ class Botix:
         self.token_pool: TokenPool = token_pool or []
 
     @staticmethod
-    def acquire_unique_start(token_pool: TokenPool) -> MovingState:
+    def acquire_unique_start(token_pool: TokenPool, none_check: bool = True) -> MovingState | None:
         """
-        Calculates the indegree of each state in the token pool to ensure unique starting states.
+        Retrieves a unique starting state from the given token pool.
 
-        This method iterates through all tokens in the token pool and counts the indegree (the number of incoming edges) for each state.
-        It ensures that there is exactly one state with zero indegree, which represents the unique starting state.
-
-        Args:
-            token_pool (TokenPool): A list of MovingTransform objects representing the token pool.
-
-        Raises:
-            ValueError: If there is not exactly one state with a zero indegree.
+        Parameters:
+        - token_pool: An instance of TokenPool, representing a collection of tokens.
+        - none_check: A boolean, defaulting to True. If True, raises a ValueError when no unique starting state is found; otherwise, returns None.
 
         Returns:
-            MovingState: The unique starting state if exactly one state has zero indegree.
+        - Either a MovingState or None. Returns the starting state (with indegree 0) if uniquely identified; based on none_check's value, either returns None or raises an exception.
         """
-        # Initialize a dictionary to store the indegree of each state
+
+        # Initialize a dictionary to hold the indegree of each state
         states_indegree: Dict[MovingState, int] = {}
 
-        # Calculate the indegree of each state
+        # Calculates the indegree for each state by examining token transitions
         for token in token_pool:
+            for state in token.from_states:
+                states_indegree[state] = states_indegree.get(state, 0)
             for state in token.to_states.values():
-                # Increment the indegree of each state reached by the token
+                # Increments the indegree for each state that a token can reach
                 states_indegree[state] = states_indegree.get(state, 0) + 1
 
-        # Identify states with zero indegree
+        # Identifies states with an indegree of zero
         zero_indegree_states = [state for state, indegree in states_indegree.items() if indegree == 0]
 
-        # Ensure there is exactly one state with zero indegree
-        if zero_indegree_states == 1:
+        # Validates that there is exactly one state with an indegree of zero
+        if len(zero_indegree_states) == 1:
             return zero_indegree_states[0]
         else:
-            raise ValueError(f"There must be exactly one state with a zero indegree, got {zero_indegree_states}")
+            if none_check:
+                # Raises an error if none_check is enabled and no unique starting state is present
+                raise ValueError(f"There must be exactly one state with a zero indegree, got {states_indegree}")
+            return None
 
     @staticmethod
     def acquire_end_state(token_pool: TokenPool) -> Set[MovingState]:
@@ -720,7 +727,7 @@ class Botix:
 
             # Update the set of not accessible states by removing the states we just found to be connected
             not_accessible_states -= connected_states - visited_states
-            visited_states += connected_states
+            visited_states.update(connected_states)
             # If there are no more not accessible states, we are done
             if len(not_accessible_states):
                 return
@@ -795,45 +802,60 @@ class Botix:
         while search_stack:
             # Pop the current state from the stack and find its connected transitions.
             cur_state: MovingState = search_stack.pop()
+            chain.append(cur_state)
             connected_transition: MovingTransition = self.acquire_connected_forward_transition(
                 cur_state, none_check=False
             )
-            connected_states = list(connected_transition.to_states.values())
 
             if rolling_back:
                 # Handle rollback logic, deciding the next step based on the current depth in the branch dictionary.
                 if connected_transition is None:
-                    raise ValueError("Should not arrive here")
+                    raise ValueError(
+                        "Should not arrive here, rolling back should always have a connected backward transition"
+                    )
+                connected_states = list(connected_transition.to_states.values())
+
                 cur_depth_index: int = branch_dict.get(cur_state)
                 if cur_depth_index == len(connected_transition.to_states):
-                    search_stack.append(chain.pop())
+                    chain.pop()
+                    search_stack.append(chain[-1])
                 else:
-                    search_stack.append(connected_states[cur_depth_index])
+                    next_state = connected_states[cur_depth_index]
+                    search_stack.append(next_state)
                     branch_dict[cur_state] = cur_depth_index + 1
+                    rolling_back = False
             else:
+
                 # Handle regular search logic, progressing based on connectivity and branching conditions.
                 if connected_transition is None:
                     rolling_back = True
-                    search_stack.append(chain.pop())
+                    chain.pop()
+                    search_stack.append(chain[-1])
                     continue
                 else:
+                    connected_states = list(connected_transition.to_states.values())
+
                     cur_depth_index: int = branch_dict.get(cur_state, 0)
                     branch_dict[cur_state] = cur_depth_index + 1
-                    if cur_depth_index == (branch_count := len(connected_states)):
+                    if cur_depth_index == len(connected_states):
                         rolling_back = True
-                        search_stack.append(chain.pop())
+                        chain.pop()
+                        search_stack.append(chain[-1])
+
                         continue
                     else:
                         next_state = connected_states[cur_depth_index]
-                        if next_state in chain:
+                        state_hash = hash(next_state)
+                        if any(state_hash == hash(state) for state in chain):
                             # Upon detecting a loop, append the loop path to the loops list.
                             loops.append(chain[chain.index(next_state) :])
                             rolling_back = True
                             continue
                         else:
                             # Add the current state to the chain and push the next state onto the search stack.
-                            chain.append(cur_state)
+
                             search_stack.append(next_state)
+
         return loops
 
     def is_branchless_chain(self, start_state: MovingState, end_state: MovingState) -> bool:
@@ -936,7 +958,6 @@ class Botix:
 
 
 if __name__ == "__main__":
-
     # Good Cases
     full = MovingState(2800)
     lr = MovingState(4000, -4000)
