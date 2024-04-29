@@ -784,74 +784,84 @@ class Botix:
         """
         Retrieves a list of all looping paths, where each path is composed of a series of MovingState instances.
 
+        This function explores all possible paths from a unique starting state, identifying loops in the process.
+        A loop is defined as a series of MovingState objects that eventually return to a previously visited state.
+
         Returns:
             List[List[MovingState]]: A list containing all looping paths, with each path being a list of MovingState objects.
         """
 
-        # Initialize the starting state, search stack, and list for storing loops.
-        start_state: MovingState = self.acquire_unique_start(self.token_pool)
-        search_stack: List[MovingState] = [start_state]
-        loops: List[List[MovingState]] = []
+        # Initialize necessary variables for path exploration and loop detection.
+        start_state: MovingState = self.acquire_unique_start(self.token_pool)  # Starting state for path exploration
+        search_stack: List[MovingState] = [start_state]  # Stack to keep track of states yet to explore
+        loops: List[List[MovingState]] = []  # List to store loops found during exploration
 
-        # Initialize the chain (current path), dictionary to track branching depths, and a rollback flag.
-        chain: List[MovingState] = []
-        branch_dict: Dict[MovingState, int] = {}
-        rolling_back: bool = False
+        # Variables for managing path tracking, branch depths, and rollback operations within the search algorithm.
+        chain: List[MovingState] = []  # Current path being explored
+        branch_dict: Dict[MovingState, int] = {}  # Dictionary to track the depth of exploration for each state
+        rolling_back: bool = False  # Flag indicating if the exploration is rolling back due to a loop detection
 
-        # Iterate until the search stack is empty.
+        # Main loop to explore all possible paths and identify loops
         while search_stack:
-            # Pop the current state from the stack and find its connected transitions.
+            # Pop the current state from the stack for exploration
             cur_state: MovingState = search_stack.pop()
-            chain.append(cur_state)
+            chain.append(cur_state)  # Add current state to the current path
+
+            # Attempt to find a connected forward transition from the current state
             connected_transition: MovingTransition = self.acquire_connected_forward_transition(
                 cur_state, none_check=False
             )
+
+            # Decision making based on the presence of a connected transition and the current exploration status
             match rolling_back, bool(connected_transition):
                 case True, False:
-                    # once the rollback is activated, there must have a forward transition connected to cur_state,
-                    # since we are come from there
+                    # This case should theoretically never be reached, indicating a logic error
                     raise ValueError("Should not arrive here!")
                 case True, True:
-
+                    # Handling rollback and progression through a loop
                     connected_states = list(connected_transition.to_states.values())
-
                     cur_depth_index: int = branch_dict.get(cur_state)
                     branch_dict[cur_state] = cur_depth_index + 1
                     if cur_depth_index == len(connected_states):
+                        # Loop completion, backtracking to continue exploration
                         chain.pop()
                         search_stack.append(chain[-1])
                     else:
+                        # Progressing to the next state within the loop
                         next_state = connected_states[cur_depth_index]
                         search_stack.append(next_state)
                         rolling_back = False
                 case False, False:
+                    # Backtracking to continue exploration from a previous state
                     rolling_back = True
                     chain.pop()
                     search_stack.append(chain[-1])
                     continue
                 case False, True:
+                    # Progressing to a new state and potentially identifying a loop
                     connected_states = list(connected_transition.to_states.values())
 
                     cur_depth_index: int = branch_dict.get(cur_state, 0)
                     branch_dict[cur_state] = cur_depth_index + 1
                     if cur_depth_index == len(connected_states):
+                        # Loop completion, preparing for backtracking
                         rolling_back = True
                         chain.pop()
                         search_stack.append(chain[-1])
                     else:
+                        # Checking for and handling loop detection
                         next_state = connected_states[cur_depth_index]
                         state_hash = hash(next_state)
                         if any(state_hash == hash(state) for state in chain):
-                            # Upon detecting a loop, append the loop path to the loops list.
+                            # Loop detected, appending the loop path to the loops list
                             loops.append(chain[chain.index(next_state) :])
                             rolling_back = True
                             continue
                         else:
-                            # Add the current state to the chain and push the next state onto the search stack.
-
+                            # Adding the new state to the chain and continuing exploration
                             search_stack.append(next_state)
 
-        return loops
+        return loops  # Returning the list of identified loops
 
     def is_branchless_chain(self, start_state: MovingState, end_state: MovingState) -> bool:
         """
