@@ -724,12 +724,12 @@ class Botix:
                 if current_state in token.from_states:
                     # Add all to_states of the current token to the connected states list
                     connected_states.update(token.to_states.values())
-
+            search_queue.extend((newly_visited := connected_states - visited_states))
             # Update the set of not accessible states by removing the states we just found to be connected
-            not_accessible_states -= connected_states - visited_states
+            not_accessible_states -= newly_visited
             visited_states.update(connected_states)
             # If there are no more not accessible states, we are done
-            if len(not_accessible_states):
+            if len(not_accessible_states) == 0:
                 return
 
         # If there are still states marked as not accessible, raise an exception
@@ -806,33 +806,30 @@ class Botix:
             connected_transition: MovingTransition = self.acquire_connected_forward_transition(
                 cur_state, none_check=False
             )
+            match rolling_back, bool(connected_transition):
+                case True, False:
+                    # once the rollback is activated, there must have a forward transition connected to cur_state,
+                    # since we are come from there
+                    raise ValueError("Should not arrive here!")
+                case True, True:
 
-            if rolling_back:
-                # Handle rollback logic, deciding the next step based on the current depth in the branch dictionary.
-                if connected_transition is None:
-                    raise ValueError(
-                        "Should not arrive here, rolling back should always have a connected backward transition"
-                    )
-                connected_states = list(connected_transition.to_states.values())
+                    connected_states = list(connected_transition.to_states.values())
 
-                cur_depth_index: int = branch_dict.get(cur_state)
-                if cur_depth_index == len(connected_transition.to_states):
-                    chain.pop()
-                    search_stack.append(chain[-1])
-                else:
-                    next_state = connected_states[cur_depth_index]
-                    search_stack.append(next_state)
+                    cur_depth_index: int = branch_dict.get(cur_state)
                     branch_dict[cur_state] = cur_depth_index + 1
-                    rolling_back = False
-            else:
-
-                # Handle regular search logic, progressing based on connectivity and branching conditions.
-                if connected_transition is None:
+                    if cur_depth_index == len(connected_states):
+                        chain.pop()
+                        search_stack.append(chain[-1])
+                    else:
+                        next_state = connected_states[cur_depth_index]
+                        search_stack.append(next_state)
+                        rolling_back = False
+                case False, False:
                     rolling_back = True
                     chain.pop()
                     search_stack.append(chain[-1])
                     continue
-                else:
+                case False, True:
                     connected_states = list(connected_transition.to_states.values())
 
                     cur_depth_index: int = branch_dict.get(cur_state, 0)
@@ -841,8 +838,6 @@ class Botix:
                         rolling_back = True
                         chain.pop()
                         search_stack.append(chain[-1])
-
-                        continue
                     else:
                         next_state = connected_states[cur_depth_index]
                         state_hash = hash(next_state)
