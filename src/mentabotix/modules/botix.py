@@ -2,6 +2,7 @@ from collections import Counter
 from dataclasses import dataclass
 from inspect import signature, Signature
 from itertools import zip_longest
+from queue import Queue
 from typing import (
     Tuple,
     TypeAlias,
@@ -27,6 +28,8 @@ from terminaltables import SingleTable
 
 from .exceptions import StructuralError, TokenizeError
 from ..tools.generators import NameGenerator
+
+T_EXPR = TypeVar("T_EXPR", str, list)
 
 Expression: TypeAlias = str | int
 
@@ -957,8 +960,128 @@ class Botix:
         start_state = self.acquire_unique_start(self.token_pool)
         end_states = self.acquire_end_state(self.token_pool)
         self.ensure_accessibility(self.token_pool, start_state, end_states)
+        if self.acquire_loops():
+            raise ValueError("Loops detected! All State-Transition should be implemented using breaker")
 
-    def compile(self) -> Callable:
+    def _assembly_match_cases(self, match_expression: str, cases: Dict[str, str]) -> List[str]:
+        """
+        Assembles a list of strings representing match cases based on the given match expression and cases dictionary.
+
+        Parameters:
+            match_expression (str): The match expression to be used.
+            cases (Dict[str, str]): A dictionary containing the cases and their corresponding values.
+
+        Returns:
+            List[str]: A list of strings representing the match cases.
+        """
+
+        lines: List[str] = [f"match {match_expression}:"]
+        for key, value in cases.items():
+            lines.append(f' case "{key}":')
+            lines.extend(self._add_indent(value.split("\n")))
+        return lines
+
+    @staticmethod
+    def _add_indent(lines: T_EXPR, indent: str = " ") -> T_EXPR:
+        """
+        Adds an indent to each line in the given list of lines or string.
+
+        Parameters:
+            lines (T_EXPR): The list of lines or string to add an indent to.
+            indent (str, optional): The string to use for the indent. Defaults to " ".
+
+        Returns:
+            T_EXPR: The list of lines with the indent added, or the string with the indent added.
+        """
+        match lines:
+            case line_seq if isinstance(line_seq, list):
+                return [f"{indent}{line}" for line in line_seq]
+            case lines_string if isinstance(lines_string, str):
+                lines_string: str
+                lines_list = lines_string.split("\n")
+                return [f"{indent}{line}" for line in lines_list]
+
+    def get_max_branchless_chain(self, start: MovingState) -> Tuple[List[MovingState], List[MovingTransition]]:
+        """
+        Retrieves the longest branchless chain of states starting from the given initial state.
+
+        Parameters:
+        - start: MovingState, the starting state for the search.
+
+        Returns:
+        - List[MovingState], the longest branchless chain of states from the start to some terminal state.
+        """
+
+        # Initialize the search queue and the longest branchless chain
+        search_queue: Queue[MovingState] = Queue(maxsize=1)
+        search_queue.put(start)
+        max_chain_states: List[MovingState] = []
+        max_chain_transitions: List[MovingTransition] = []
+        # Perform a breadth-first search
+        while not search_queue.empty():
+            cur_state = search_queue.get()  # Get the current state
+
+            # Attempt to acquire the next state connected to the current one
+            connected_transition: MovingTransition | None = self.acquire_connected_forward_transition(
+                cur_state, none_check=False
+            )
+
+            max_chain_states.append(cur_state)  # Add the current state to the max chain
+
+            match connected_transition:
+                case None:
+                    # If no next state, end the search path
+                    pass
+                case branchless_transition if len(branchless_transition.to_states) == 1:
+                    # If the next state is branchless, enqueue it for further search
+                    max_chain_transitions.append(branchless_transition)
+                    search_queue.put(list(branchless_transition.to_states.values())[0])
+                case _:
+                    # If the next state has branches, ignore and continue with other paths
+                    pass
+
+        return max_chain_states, max_chain_transitions
+
+    @staticmethod
+    def _compile_branchless_chain(
+        states: List[MovingState],
+        transitions: List[MovingTransition],
+        controller: Optional[CloseLoopController] = None,
+    ) -> Tuple[List[str], Context]:
+        """
+        Retrieves information from states and transitions to compile a branchless chain.
+
+        Parameters:
+            - self: The current instance of the class.
+            - states: A list of MovingState objects representing the states in the chain.
+            - transitions: A list of MovingTransition objects representing the transitions between states.
+            - controller: An optional CloseLoopController object, defaulting to None.
+
+        Returns:
+            - Tuple[List[str], Context]: A tuple containing a list of strings representing compiled branchless chain tokens and a context dictionary.
+
+        Note:
+            This function compiles a branchless chain by analyzing the states and transitions provided.
+        """
+        context: Context = {}
+        state_temp_data = states.pop(0).tokenize(controller)
+        ret: List[str] = []
+        ret.extend(state_temp_data[0])
+        context.update(state_temp_data[1])
+
+        for state, transition in zip(states, transitions):
+            state: MovingState
+            transition: MovingTransition
+            match transition.tokenize(), state.tokenize(controller):
+                case (state_tokens, state_context), (transition_tokens, transition_context):
+                    ret.extend(transition_tokens)
+                    context.update(transition_context)
+                    ret.extend(state_tokens)
+                    context.update(state_context)
+        return ret, context
+
+    def compile(self) -> Callable[[], Any]:
+
         raise NotImplementedError
 
 

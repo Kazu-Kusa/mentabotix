@@ -76,6 +76,7 @@ class TestBotix(unittest.TestCase):
         self.assertFalse(self.botix_instance.is_branchless_chain(self.state_a, self.state_c))
 
     def test_acquire_loops(self):
+        MovingState.__state_id_counter__ = 0
         state_a = MovingState(100)
         state_b = MovingState(200)
         state_c = MovingState(300)
@@ -102,7 +103,62 @@ class TestBotix(unittest.TestCase):
             controller=controller,
         )
 
-        print(botix.acquire_loops())
+        self.assertEqual(
+            str(botix.acquire_loops()),
+            "[[4-MovingState(500, 500, 500, 500), 5-MovingState(600, 600, 600, 600), 3-MovingState(400, 400, 400, 400)]]",
+        )
+
+    def test_max_branchless_chain_check(self):
+        MovingState.__state_id_counter__ = 0
+        """测试无分支链检查"""
+        # 无分支链
+        state_a = MovingState(100)
+        state_b = MovingState(200)
+        state_c = MovingState(300)
+        state_d = MovingState(400)
+        state_e = MovingState(500)
+        state_f = MovingState(600)
+
+        state_k = MovingState(700)
+        state_l = MovingState(800)
+        state_z = MovingState(900)
+
+        transition_a_bcd = MovingTransition(
+            duration=1, from_states=state_a, to_states={1: state_b, 2: state_c, 3: state_d}
+        )
+
+        transition_d_e = MovingTransition(duration=1, from_states=state_d, to_states=state_e)
+
+        transition_e_f = MovingTransition(duration=1, from_states=state_e, to_states=state_f)
+
+        transition_f_d = MovingTransition(duration=1, from_states=state_f, to_states=state_d)
+
+        transition_c_e = MovingTransition(duration=1, from_states=state_c, to_states=state_e)
+
+        transition_b_k = MovingTransition(duration=1, from_states=state_b, to_states=state_k)
+        transition_k_lz = MovingTransition(duration=1, from_states=state_k, to_states={1: state_l, 2: state_z})
+        controller = CloseLoopController(
+            motor_infos=[MotorInfo(0), MotorInfo(1), MotorInfo(2), MotorInfo(3)], port="COM3"
+        )
+        botix = Botix(
+            token_pool=[
+                transition_a_bcd,
+                transition_d_e,
+                transition_e_f,
+                transition_f_d,
+                transition_c_e,
+                transition_b_k,
+                transition_k_lz,
+            ],
+            controller=controller,
+        )
+
+        self.assertEqual(str(botix.get_max_branchless_chain(state_a)), "([0-MovingState(100, 100, 100, 100)], [])")
+        self.assertEqual(
+            str(botix.get_max_branchless_chain(state_b)),
+            "([1-MovingState(200, 200, 200, 200), 6-MovingState(700, 700, 700, 700)],"
+            " [[1-MovingState(200, 200, 200, 200)] => [6-MovingState(700, 700, 700, 700)]])",
+        )
 
 
 if __name__ == "__main__":
