@@ -8,7 +8,12 @@
 Use `pdm` to install mentabotix
 
 ```shell
+# for stable release
 pdm add mentabotix
+
+# for unstable release
+pdm add mentabotix --pre
+
 ```
 
 ## Usage
