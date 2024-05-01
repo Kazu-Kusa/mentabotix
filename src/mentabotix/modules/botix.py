@@ -796,19 +796,19 @@ class Botix:
 
         # Initialize necessary variables for path exploration and loop detection.
         start_state: MovingState = self.acquire_unique_start(self.token_pool)  # Starting state for path exploration
-        search_stack: List[MovingState] = [start_state]  # Stack to keep track of states yet to explore
+        search_queue: Queue[MovingState] = Queue(maxsize=1)  # queue to keep track of states yet to explore
+        search_queue.put(start_state)
         loops: List[List[MovingState]] = []  # List to store loops found during exploration
 
         # Variables for managing path tracking, branch depths, and rollback operations within the search algorithm.
         chain: List[MovingState] = []  # Current path being explored
         branch_dict: Dict[MovingState, int] = {}  # Dictionary to track the depth of exploration for each state
         rolling_back: bool = False  # Flag indicating if the exploration is rolling back due to a loop detection
-
+        rollback_to_start: bool = False  # Flag indicating if the exploration is rolling back to the start state
         # Main loop to explore all possible paths and identify loops
-        while search_stack:
+        while not rollback_to_start:
             # Pop the current state from the stack for exploration
-            cur_state: MovingState = search_stack.pop()
-            chain.append(cur_state)  # Add current state to the current path
+            cur_state: MovingState = search_queue.get(False)
 
             # Attempt to find a connected forward transition from the current state
             connected_transition: MovingTransition = self.acquire_connected_forward_transition(
@@ -821,37 +821,42 @@ class Botix:
                     # This case should theoretically never be reached, indicating a logic error
                     raise ValueError("Should not arrive here!")
                 case True, True:
+
                     # Handling rollback and progression through a loop
                     connected_states = list(connected_transition.to_states.values())
                     cur_depth_index: int = branch_dict.get(cur_state)
-                    branch_dict[cur_state] = cur_depth_index + 1
                     if cur_depth_index == len(connected_states):
+                        if hash(cur_state) == hash(start_state):
+                            rollback_to_start = True
+                            continue
                         # Loop completion, backtracking to continue exploration
-                        chain.pop()
-                        search_stack.append(chain[-1])
+                        search_queue.put(chain.pop())
                     else:
+                        branch_dict[cur_state] = cur_depth_index + 1
+
                         # Progressing to the next state within the loop
                         next_state = connected_states[cur_depth_index]
-                        search_stack.append(next_state)
+                        chain.append(cur_state)
+                        search_queue.put(next_state)
                         rolling_back = False
                 case False, False:
                     # Backtracking to continue exploration from a previous state
                     rolling_back = True
-                    chain.pop()
-                    search_stack.append(chain[-1])
+                    search_queue.put(chain.pop())
                     continue
                 case False, True:
                     # Progressing to a new state and potentially identifying a loop
                     connected_states = list(connected_transition.to_states.values())
 
                     cur_depth_index: int = branch_dict.get(cur_state, 0)
-                    branch_dict[cur_state] = cur_depth_index + 1
+
                     if cur_depth_index == len(connected_states):
                         # Loop completion, preparing for backtracking
                         rolling_back = True
-                        chain.pop()
-                        search_stack.append(chain[-1])
+                        search_queue.put(chain.pop())
                     else:
+                        chain.append(cur_state)  # Add current state to the current path
+                        branch_dict[cur_state] = cur_depth_index + 1
                         # Checking for and handling loop detection
                         next_state = connected_states[cur_depth_index]
                         state_hash = hash(next_state)
@@ -859,10 +864,11 @@ class Botix:
                             # Loop detected, appending the loop path to the loops list
                             loops.append(chain[chain.index(next_state) :])
                             rolling_back = True
+                            search_queue.put(chain.pop())
                             continue
-                        else:
-                            # Adding the new state to the chain and continuing exploration
-                            search_stack.append(next_state)
+
+                        # Adding the new state to the chain and continuing exploration
+                        search_queue.put(next_state)
 
         return loops  # Returning the list of identified loops
 
@@ -924,7 +930,10 @@ class Botix:
             case 1:
                 return response[0]
             case _:
-                raise ValueError(f"A state can *ONLY* connect to ONE transition as its input. Found {response}")
+                err_out = "\n".join(str(x) for x in response)
+                raise ValueError(
+                    f"A state can *ONLY* connect to ONE transition as its input. Found conflicting transitions:\n {err_out}"
+                )
 
     def acquire_connected_backward_transition(
         self, state: MovingState, none_check: bool = True

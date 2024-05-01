@@ -22,7 +22,7 @@ class TestBotix(unittest.TestCase):
 
         # 初始化一个Botix实例用于测试
         self.controller_mock = Mock(spec=CloseLoopController)
-        self.token_pool = [self.transition_ab, self.transition_bc, self.transition_start_a]
+        self.token_pool = [self.transition_start_a, self.transition_ab, self.transition_bc]
         self.botix_instance = Botix(controller=self.controller_mock, token_pool=self.token_pool)
 
     def test_get_start(self):
@@ -76,6 +76,11 @@ class TestBotix(unittest.TestCase):
         self.assertFalse(self.botix_instance.is_branchless_chain(self.state_a, self.state_c))
 
     def test_acquire_loops(self):
+
+        # test with non-loop check
+        self.assertEqual([], self.botix_instance.acquire_loops())
+
+        # test a simple single loop check
         MovingState.__state_id_counter__ = 0
         state_a = MovingState(100)
         state_b = MovingState(200)
@@ -106,7 +111,25 @@ class TestBotix(unittest.TestCase):
 
         self.assertEqual(
             str(self.botix_instance.acquire_loops()),
-            "[[4-MovingState(500, 500, 500, 500), 5-MovingState(600, 600, 600, 600), 3-MovingState(400, 400, 400, 400)]]",
+            "[[4-MovingState(500, 500, 500, 500), "
+            "5-MovingState(600, 600, 600, 600), "
+            "3-MovingState(400, 400, 400, 400)]]",
+        )
+
+        # try to deal with the Diamond transition
+
+        self.botix_instance.token_pool.remove(transition_f_d)
+        transition_f_cd = MovingTransition(duration=1, from_states=state_f, to_states={1: state_c, 2: state_d})
+        self.botix_instance.token_pool.append(transition_f_cd)
+
+        self.assertEqual(
+            "[[2-MovingState(300, 300, 300, 300), "
+            "4-MovingState(500, 500, 500, 500), "
+            "5-MovingState(600, 600, 600, 600)], "
+            "[4-MovingState(500, 500, 500, 500), "
+            "5-MovingState(600, 600, 600, 600), "
+            "3-MovingState(400, 400, 400, 400)]]",
+            str(self.botix_instance.acquire_loops()),
         )
 
     def test_max_branchless_chain_check(self):
