@@ -1,4 +1,6 @@
+import random
 import unittest
+from typing import List
 from unittest.mock import Mock
 
 from bdmc.modules.controller import CloseLoopController
@@ -230,6 +232,70 @@ class TestBotix(unittest.TestCase):
         # Test _add_indent TypeError
         with self.assertRaises(TypeError):
             test_instance._add_indent(123)  # This should raise a TypeError
+
+    def test_compile(self):
+        self.botix_instance.compile()
+        self.assertEqual(
+            self.botix_instance.compile(True)[0],
+            [
+                "def _func():",
+                "    con.set_motors_speed((-1, -1, -1, -1)).delay(0.1).set_motors_speed((0, 0, 0, 0)).delay(1).set_motors_speed((1, 1, 1, 1)).delay(2).set_motors_speed((2, 2, 2, 2))",
+            ],
+        )
+
+    def test_compile_with_branches(self):
+        MovingState.__state_id_counter__ = 0
+        MovingTransition.__state_id_counter__ = 0
+        state_a = MovingState(100)
+        state_b = MovingState(200)
+        state_c = MovingState(300)
+        state_d = MovingState(400)
+        state_e = MovingState(500)
+        state_f = MovingState(600)
+
+        def transition_breaker_fac(lst: List[int]):
+            def _inner() -> int:
+                return random.choice(lst)
+
+            return _inner
+
+        transition_a_bcd = MovingTransition(
+            duration=1,
+            from_states=state_a,
+            to_states={1: state_b, 2: state_c, 3: state_d},
+            breaker=transition_breaker_fac([1, 2, 3]),
+        )
+        transition_d_ef = MovingTransition(
+            duration=1,
+            from_states=state_d,
+            to_states={1: state_e, 2: state_f},
+            breaker=transition_breaker_fac([1, 2]),
+        )
+
+        self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
+
+        compiled = self.botix_instance.compile(True)
+        self.assertEqual(
+            [
+                "def _func():",
+                "    match con.set_motors_speed((100, 100, 100, " "100)).delay_b_match(1,transition0_breaker_1,0.01):",
+                "        case 1:",
+                "            con.set_motors_speed((200, 200, 200, 200))",
+                "        case 2:",
+                "            con.set_motors_speed((300, 300, 300, 300))",
+                "        case 3:",
+                "            match con.set_motors_speed((400, 400, 400, "
+                "400)).delay_b_match(1,transition1_breaker_1,0.01):",
+                "                case 1:",
+                "                    con.set_motors_speed((500, 500, 500, 500))",
+                "                case 2:",
+                "                    con.set_motors_speed((600, 600, 600, 600))",
+            ],
+            compiled[0],
+        )
+
+        obj = self.botix_instance.compile()
+        obj()
 
 
 if __name__ == "__main__":

@@ -972,7 +972,7 @@ class Botix:
         if self.acquire_loops():
             raise ValueError("Loops detected! All State-Transition should be implemented using breaker")
 
-    def _assembly_match_cases(self, match_expression: str, cases: Dict[str, str]) -> List[str]:
+    def _assembly_match_cases(self, match_expression: str | List[str], cases: Dict[str, str | List[str]]) -> List[str]:
         """
         Assembles a list of strings representing match cases based on the given match expression and cases dictionary.
 
@@ -983,11 +983,12 @@ class Botix:
         Returns:
             List[str]: A list of strings representing the match cases.
         """
+        match_expression = "".join(match_expression) if isinstance(match_expression, list) else match_expression
 
         lines: List[str] = [f"match {match_expression}:"]
         for key, value in cases.items():
             lines.append(self._add_indent(f"case {key}:", count=1))
-            lines.extend(self._add_indent(value.split("\n"), count=2))
+            lines.extend(self._add_indent(value.split("\n") if isinstance(value, str) else value, count=2))
         return lines
 
     @staticmethod
@@ -1075,6 +1076,8 @@ class Botix:
         Note:
             This function compiles a branchless chain by analyzing the states and transitions provided.
         """
+        states = list(states)
+        transitions = list(transitions)
         context: Context = {}
         state_temp_data = states.pop(0).tokenize(controller)
         ret: List[str] = []
@@ -1084,7 +1087,7 @@ class Botix:
         for state, transition in zip(states, transitions):
             state: MovingState
             transition: MovingTransition
-            match transition.tokenize(), state.tokenize(controller):
+            match state.tokenize(controller), transition.tokenize():
                 case (state_tokens, state_context), (transition_tokens, transition_context):
                     ret.extend(transition_tokens)
                     context.update(transition_context)
@@ -1092,9 +1095,100 @@ class Botix:
                     context.update(state_context)
         return ret, context
 
-    def compile(self) -> Callable[[], Any]:
+    def _recursive_compile_tokens(self, start: MovingState, controller_name: str, context: Context) -> List[str]:
+        """
+        Compiles the tokens for a recursive chain of states starting from the given `start` state.
 
-        raise NotImplementedError
+        Args:
+            start (MovingState): The starting state of the chain.
+            context (Context): The context dictionary to update with the compiled tokens.
+
+        Returns:
+            List[str]: A list of strings representing the compiled tokens.
+
+        This function recursively compiles the tokens for a chain of states starting from the given `start` state. It first
+        retrieves the maximum branchless chain from the `start` state using the `acquire_max_branchless_chain` method.
+        Then, it compiles the tokens for the branchless chain using the `_compile_branchless_chain` method and updates
+        the `context` dictionary with the compiled tokens. If the maximum branchless chain has a connected forward
+        transition, the function recursively compiles the tokens for the forward states and appends them to the
+        `compiled_lines` list. Finally, the function returns the `compiled_lines` list.
+        """
+        # Initialize an empty list to hold the compiled lines of tokens
+        compiled_lines: List[str] = []
+
+        # Retrieve the maximum branchless chain from the starting state
+        max_branchless_chain = self.acquire_max_branchless_chain(start=start)
+
+        # Compile the tokens for the acquired branchless chain and update context
+        compiled_tokens, compiled_context = self._compile_branchless_chain(
+            *max_branchless_chain, controller=self.controller
+        )
+        context.update(compiled_context)
+
+        line = f"{controller_name}" + "".join(compiled_tokens)
+
+        # Check if the last state in the branchless chain has a connected forward transition
+        match max_branchless_chain:
+            case ([*_, last_state], _) if connected_forward_transition := self.acquire_connected_forward_transition(
+                last_state, none_check=False
+            ):
+
+                branch_transition, branch_context = connected_forward_transition.tokenize()
+                context.update(branch_context)
+                match_expr = line + "".join(branch_transition)
+                match_branch: Dict[str, List[str]] = {}
+                for case, value in connected_forward_transition.to_states.items():
+                    match_branch[str(case)] = self._recursive_compile_tokens(
+                        start=value, context=context, controller_name=controller_name
+                    )
+                lines = self._assembly_match_cases(match_expression=match_expr, cases=match_branch)
+                return lines
+            case _:
+                compiled_lines.append(line)
+                # If no forward transition is present, return the compiled lines
+                return compiled_lines
+
+    def compile(self, return_median: bool = False) -> Callable[[], None] | Tuple[List[str], Context]:
+        """
+        Compiles the bot's code and returns a callable function or a tuple of compiled lines and context.
+
+        Args:
+            return_median (bool, optional): Whether to return the compiled lines and context instead of a callable function. Defaults to False.
+
+        Returns:
+            Callable[[], None] | Tuple[List[str], Context]: The compiled function or a tuple of compiled lines and context.
+
+        Raises:
+            None
+
+        Description:
+            This function compiles the bot's code and returns a callable function that can be executed. It first checks the requirements of the bot's code using the `_check_met_requirements` method. Then, it creates a function name, function head, and controller name. It initializes an empty context dictionary with the controller name as the key and the bot's controller as the value.
+
+            It retrieves the unique start state from the token pool using the `acquire_unique_start` method.
+
+            Next, it compiles the tokens for the recursive chain of states using the `_recursive_compile_tokens` method. It adds the function head to the beginning of the compiled lines and adds the necessary indentation.
+
+            If `return_median` is True, it returns the compiled lines and context as a tuple. Otherwise, it executes the compiled lines using the `exec` function and retrieves the compiled function from the context dictionary. The compiled function is then returned.
+        """
+
+        self._check_met_requirements()
+        function_name = "_func"
+        function_head = f"def {function_name}():"
+        controller_name = "con"
+        context: Context = {controller_name: self.controller}
+
+        start_state: MovingState = self.acquire_unique_start(self.token_pool)
+
+        function_lines = self._add_indent(
+            self._recursive_compile_tokens(start=start_state, context=context, controller_name=controller_name)
+        )
+        function_lines.insert(0, function_head)
+
+        if return_median:
+            return function_lines, context
+        exec("\n".join(function_lines), context)
+        compiled_obj: Callable[[], None] = context.get(function_name)
+        return compiled_obj
 
 
 if __name__ == "__main__":
