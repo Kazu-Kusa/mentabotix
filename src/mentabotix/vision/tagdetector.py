@@ -6,7 +6,7 @@ import warnings
 from copy import deepcopy
 from threading import Thread
 from time import sleep
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, Literal
 
 import cv2
 from cv2 import Mat, cvtColor, COLOR_RGB2GRAY
@@ -67,7 +67,7 @@ class TagDetector:
     def __init__(
         self,
         cam_id: int,
-        team_color: str,
+        team_color: Literal["blue", "yellow"],
         start_detect_tag: bool = True,
         single_tag_mode: bool = True,
         minimal_resolution: bool = True,
