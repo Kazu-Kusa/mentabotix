@@ -977,12 +977,12 @@ class Botix:
 
         lines: List[str] = [f"match {match_expression}:"]
         for key, value in cases.items():
-            lines.append(f' case "{key}":')
-            lines.extend(self._add_indent(value.split("\n")))
+            lines.append(self._add_indent(f"case {key}:", count=1))
+            lines.extend(self._add_indent(value.split("\n"), count=2))
         return lines
 
     @staticmethod
-    def _add_indent(lines: T_EXPR, indent: str = " ") -> T_EXPR:
+    def _add_indent(lines: T_EXPR, indent: str = "    ", count: int = 1) -> T_EXPR:
         """
         Adds an indent to each line in the given list of lines or string.
 
@@ -993,15 +993,18 @@ class Botix:
         Returns:
             T_EXPR: The list of lines with the indent added, or the string with the indent added.
         """
+        final_indent = indent * count
         match lines:
-            case line_seq if isinstance(line_seq, list):
-                return [f"{indent}{line}" for line in line_seq]
+            case line_seq if isinstance(line_seq, list) and all((isinstance(line, str) for line in line_seq)):
+                return [f"{final_indent}{line}" for line in line_seq]
             case lines_string if isinstance(lines_string, str):
                 lines_string: str
                 lines_list = lines_string.split("\n")
-                return [f"{indent}{line}" for line in lines_list]
+                return "\n".join(f"{final_indent}{line}" for line in lines_list)
+            case _:
+                raise TypeError(f"Expected list or string, but got {type(lines)}")
 
-    def get_max_branchless_chain(self, start: MovingState) -> Tuple[List[MovingState], List[MovingTransition]]:
+    def acquire_max_branchless_chain(self, start: MovingState) -> Tuple[List[MovingState], List[MovingTransition]]:
         """
         Retrieves the longest branchless chain of states starting from the given initial state.
 

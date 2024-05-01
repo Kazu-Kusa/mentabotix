@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from bdmc.modules.controller import CloseLoopController, MotorInfo
+from bdmc.modules.controller import CloseLoopController
 
 from mentabotix import Botix, MovingState, MovingTransition
 from mentabotix.modules.exceptions import StructuralError
@@ -95,16 +95,17 @@ class TestBotix(unittest.TestCase):
         transition_f_d = MovingTransition(duration=1, from_states=state_f, to_states=state_d)
 
         transition_c_e = MovingTransition(duration=1, from_states=state_c, to_states=state_e)
-        controller = CloseLoopController(
-            motor_infos=[MotorInfo(0), MotorInfo(1), MotorInfo(2), MotorInfo(3)], port="COM3"
-        )
-        botix = Botix(
-            token_pool=[transition_a_bcd, transition_d_e, transition_e_f, transition_f_d, transition_c_e],
-            controller=controller,
-        )
+
+        self.botix_instance.token_pool = [
+            transition_a_bcd,
+            transition_d_e,
+            transition_e_f,
+            transition_f_d,
+            transition_c_e,
+        ]
 
         self.assertEqual(
-            str(botix.acquire_loops()),
+            str(self.botix_instance.acquire_loops()),
             "[[4-MovingState(500, 500, 500, 500), 5-MovingState(600, 600, 600, 600), 3-MovingState(400, 400, 400, 400)]]",
         )
 
@@ -137,28 +138,75 @@ class TestBotix(unittest.TestCase):
 
         transition_b_k = MovingTransition(duration=1, from_states=state_b, to_states=state_k)
         transition_k_lz = MovingTransition(duration=1, from_states=state_k, to_states={1: state_l, 2: state_z})
-        controller = CloseLoopController(
-            motor_infos=[MotorInfo(0), MotorInfo(1), MotorInfo(2), MotorInfo(3)], port="COM3"
-        )
-        botix = Botix(
-            token_pool=[
-                transition_a_bcd,
-                transition_d_e,
-                transition_e_f,
-                transition_f_d,
-                transition_c_e,
-                transition_b_k,
-                transition_k_lz,
-            ],
-            controller=controller,
-        )
 
-        self.assertEqual(str(botix.get_max_branchless_chain(state_a)), "([0-MovingState(100, 100, 100, 100)], [])")
+        self.botix_instance.token_pool = [
+            transition_a_bcd,
+            transition_d_e,
+            transition_e_f,
+            transition_f_d,
+            transition_c_e,
+            transition_b_k,
+            transition_k_lz,
+        ]
+
         self.assertEqual(
-            str(botix.get_max_branchless_chain(state_b)),
+            str(self.botix_instance.acquire_max_branchless_chain(state_a)), "([0-MovingState(100, 100, 100, 100)], [])"
+        )
+        self.assertEqual(
+            str(self.botix_instance.acquire_max_branchless_chain(state_b)),
             "([1-MovingState(200, 200, 200, 200), 6-MovingState(700, 700, 700, 700)],"
             " [[1-MovingState(200, 200, 200, 200)] => [6-MovingState(700, 700, 700, 700)]])",
         )
+
+    def test_ident(self):
+        test_string = "Line 1\nLine 2\nLine 3"
+        expected_output = "    Line 1\n    Line 2\n    Line 3"
+        assert self.botix_instance._add_indent(test_string, indent="    ", count=1) == expected_output
+
+        test_list = ["Line 1", "Line 2", "Line 3"]
+        expected_output = ["    Line 1", "    Line 2", "    Line 3"]
+        assert self.botix_instance._add_indent(test_list, indent="    ") == expected_output
+
+        test_list = ["Line 1", 2, "Line 3"]
+        with self.assertRaises(TypeError):
+            self.botix_instance._add_indent(test_list, indent="    ")
+
+        invalid_input = 123  # 假设一个非字符串非列表的输入
+        with self.assertRaises(TypeError):
+            self.botix_instance._add_indent(invalid_input, indent="    ")
+
+    def test_asm_and_indent_without_setup(self):
+        # Instantiate your class if needed for non-static methods
+        test_instance = self.botix_instance
+
+        # Define test data
+        cases = {"case1": "result1\n    more_result1", "case2": "result2"}
+        match_expression = "some_variable"
+
+        # Test _add_indent with list
+        input_lines = ["line1", "line2"]
+        expected_output_list = ["    line1", "    line2"]
+        self.assertEqual(test_instance._add_indent(input_lines, count=1), expected_output_list)
+
+        # Test _add_indent with string
+        input_string = "line1\nline2"
+        expected_output_string = "    line1\n    line2"
+        self.assertEqual(test_instance._add_indent(input_string, count=1), expected_output_string)
+
+        # Test _assembly_match_cases
+        expected_match_cases = [
+            "match some_variable:",
+            "    case case1:",
+            "        result1",
+            "            more_result1",
+            "    case case2:",
+            "        result2",
+        ]
+        self.assertEqual(test_instance._assembly_match_cases(match_expression, cases), expected_match_cases)
+
+        # Test _add_indent TypeError
+        with self.assertRaises(TypeError):
+            test_instance._add_indent(123)  # This should raise a TypeError
 
 
 if __name__ == "__main__":
