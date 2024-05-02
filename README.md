@@ -321,6 +321,59 @@ transition_forward_to_stop = MovingTransition(
 Create a collection of your states and transitions, ensuring each transition correctly references its source and target
 states.
 
+A legal control schema should have a start state and at least one end state.
+And each state can **ONLY** connect to **ONE** transition as its input state
+
+```python
+from mentabotix import MovingState, MovingTransition
+import random
+
+moving_left = MovingState.turn("l", 10)
+moving_right = MovingState.turn("r", 10)
+moving_dash = MovingState.straight(100)
+stopped_state = MovingState(0)
+
+start_state = MovingState(100)
+
+
+def _breaker_1() -> int:
+    return random.choice([0, 1, 2])
+
+
+def _breaker_2() -> int:
+    return random.choice([0, 1])
+
+
+transition_1 = MovingTransition(
+    duration=2,  # Duration to transition
+    breaker=_breaker_1,  # When to break the transition
+    from_states=stopped_state,
+    to_states={1: moving_left, 2: moving_right, 0: moving_dash},
+)
+
+transition_2 = MovingTransition(
+    duration=2,  # Duration to transition
+    breaker=_breaker_2,  # When to break the transition
+    from_states=stopped_state,
+    to_states={0: moving_dash, 1: stopped_state},
+)
+
+
+```
+
+As the above example, `transition_1` and `transition_2` both have the `stopped_state` as the input state,which means
+the `stopped_state` connects more than **ONE** transition. Definition as such is illegal and will not pass the compile
+stage.
+
+Normally, you can ensure that the structure is valid by using `ensure_structure_validity`. to eliminate this problem.
+
+```python
+from mentabotix import Botix
+
+# A StructuralError will be raised if the structure is not valid
+Botix.ensure_structure_validity([transition_1, transition_2])
+```
+
 ### Compiling to Closures with Botix
 
 Once your control schema is defined, Botix can help you compile this structure into executable code, often referred to
