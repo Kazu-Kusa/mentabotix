@@ -280,7 +280,7 @@ By printing out the `compiled_code_lines` list, you can see the code lines that 
 
 ```
 
-But usaully, you want to compile the code into a closure that can be used to control the robot with higher performance
+But usually, you want to compile the code into a closure that can be used to control the robot with higher performance
 and less human error.
 
 ```python
@@ -297,7 +297,7 @@ start_state = MovingState(-1)
 state_a = MovingState(0)
 state_b = MovingState(1)
 state_c = MovingState(2)
-# 创建一些假的MovingTransition对象用于测试
+# create some transitions
 transition_start_a = MovingTransition(duration=0.1, from_states=start_state, to_states=state_a)
 transition_ab = MovingTransition(duration=1, from_states=state_a, to_states=state_b)
 transition_bc = MovingTransition(duration=2, from_states=state_b, to_states=state_c)
@@ -315,11 +315,8 @@ print(function_closure)
 
 By printing out the `function_closure` object, you can see the compiled code as a closure that can be called
 
-```python
-< function
-_func
-at
-0x0000020D40EAECA0 >
+```
+< function _func at 0x0000020D40EAECA0 >
 ```
 
 Usage is as follows
