@@ -403,9 +403,24 @@ compiled_closure()
 
 ```
 
-### Conclusion
+## Logging
 
-By following these steps, you can design a control schema for your robot using state transitions and compile it into
-executable code using Botix. Remember, practice and experimentation are key – start with simple schemas and gradually
-increase complexity as you become more comfortable with the process. Always test your schemas in a safe environment
-before deploying on actual hardware.
+use `set_log_level` to silent the console to improve the performance in high pressure conditions
+
+```python
+from mentabotix import set_log_level
+
+"""
+Logging DEBUG - Debugging information, used for detailed development phase logs, typically with a value of 10.
+Logging INFO - Information message, used to inform the general program running status, with a value of 20.
+Logging WARN - A warning message indicating that there may be a problem but the program is still running, with a value of 30.
+Logging Error - Error message indicating an issue preventing the program from executing properly, with a value of 40.
+Logging CRITICAL - Fatal error message indicating a serious system failure with a value of 50.
+"""
+
+set_log_level(50)  # set the log-level to 50, which makes logger only print the msg important than the CRITICAL logging
+
+from logging import CRITICAL
+
+set_log_level(CRITICAL)  # this has the same effect as above
+```
