@@ -34,7 +34,17 @@ Firstly, you need to define sampler functions that adhere to the specifications 
 could include sequence samplers that return a series of data points, index samplers that provide data at a specific
 index, and direct response samplers that give an immediate value.
 
+|               Sampler                |                 Description                  |                    Type                    |
+|:------------------------------------:|:--------------------------------------------:|:------------------------------------------:|
+| `mentabotix.SamplerType.SEQ_SAMPLER` | The sensor data is returned in a `Sequence`. | `Callable[[], Sequence[Union[float,int]]]` |
+| `mentabotix.SamplerType.IDX_SAMPLER` |         Use a index to get the data.         |    `Callable[[int], Union[float,int]]`     |
+| `mentabotix.SamplerType.DRC_SAMPLER` |  Direct read sensor data without any args.   |      `Callable[[], Union[float,int]]`      |
+
+> Do remember to add return type annotations to your sampler functions, which will be used to classify the samplers into
+> their respective types in the `Menta` class.
+
 ```python
+
 def temperature_sequence_sampler() -> list[float]:
     """Simulates a sequence of temperature readings."""
     return [25.5, 26.0, 25.8]
@@ -58,7 +68,26 @@ After defining the sampler functions, initialize the `Menta` instance and add th
 ```python
 from mentabotix import Menta  # Ensure to import the correct Menta class
 
-menta_instance = Menta(samplers=[temperature_sequence_sampler, humidity_index_sampler, light_direct_sampler])
+
+def temperature_sequence_sampler() -> list[float]:
+    """Simulates a sequence of temperature readings."""
+    return [25.5, 26.0, 25.8]
+
+
+def humidity_index_sampler(index: int) -> float:
+    """Returns simulated humidity data at a given index."""
+    humidity_values = [45.0, 50.0, 55.0]
+    return humidity_values[index]
+
+
+def light_direct_sampler() -> float:
+    """Provides the current light intensity reading."""
+    return 750.0
+
+
+menta_instance = Menta()
+menta_instance.samplers.extend([temperature_sequence_sampler, humidity_index_sampler, light_direct_sampler])
+
 ```
 
 #### Step 3: Update Sampler Types
@@ -66,48 +95,107 @@ menta_instance = Menta(samplers=[temperature_sequence_sampler, humidity_index_sa
 Invoke the `update_sampler_types` method to automatically classify the samplers into their respective types.
 
 ```python
+from mentabotix import Menta  # Ensure to import the correct Menta class
+
+
+def temperature_sequence_sampler() -> list[float]:
+    """Simulates a sequence of temperature readings."""
+    return [25.5, 26.0, 25.8]
+
+
+def humidity_index_sampler(index: int) -> float:
+    """Returns simulated humidity data at a given index."""
+    humidity_values = [45.0, 50.0, 55.0]
+    return humidity_values[index]
+
+
+def light_direct_sampler() -> float:
+    """Provides the current light intensity reading."""
+    return 750.0
+
+
+menta_instance = Menta()
+menta_instance.samplers.extend([temperature_sequence_sampler, humidity_index_sampler, light_direct_sampler])
+
 menta_instance.update_sampler_types()
 ```
 
-#### Step 4: Construct Updater Function
+#### Step 4: Construct Judge Function
 
 To use the samplers in a meaningful way, you can construct an updater function that encapsulates a condition based on
 which system updates might occur. For example:
 
 ```python
-from mentabotix import SamplerUsage
+from mentabotix import SamplerUsage, Menta
 
-# Assuming we want to trigger an update when the temperature is above 25 and humidity is below 50%
-judging_source = "temp > 25 and humidity < 50"
+
+def temperature_sequence_sampler() -> list[float]:
+    """Simulates a sequence of temperature readings."""
+    return [25.5, 26.0, 25.8]
+
+
+def humidity_index_sampler(index: int) -> float:
+    """Returns simulated humidity data at a given index."""
+    humidity_values = [45.0, 50.0, 55.0]
+    return humidity_values[index]
+
+
+def light_direct_sampler() -> float:
+    """Provides the current light intensity reading."""
+    return 750.0
+
+
+menta_instance = Menta()
+menta_instance.samplers.extend([temperature_sequence_sampler, humidity_index_sampler, light_direct_sampler])
+
+menta_instance.update_sampler_types()
 
 # Define how samplers will be used
 usages = [
-    SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+
     # Use sequence sampler for first and third temp data
-    SamplerUsage(used_sampler_index=1, required_data_indexes=[0]),  # Use index sampler for the first humidity value
-    # For direct response samplers, typically, no required_data_indexes are needed since they return a single value
+    SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+    # Use index sampler for the first humidity value
+    SamplerUsage(used_sampler_index=1, required_data_indexes=[0]),
 ]
 
-updater_function = menta_instance.construct_updater(usages)
+# Note: the judge source has some built-in syntaxes.Currently, sensor data indexes flattening and extra data context insertion
+# s0 stands for the data at index 0 of the first sampler
+# s1 stands for the data at index 2 of the first sampler
+# s3 stands for the data at index 1 of the second sampler
 
-# Execute the updater function
-result = updater_function()
-print(result)
+judging_source = "(s0 > 25 and s1 < 50) or s3>baseline"
+
+# Extra context for the judge function, here only contains the "baseline"
+extra_context = {"baseline": 47}
+
+from typing import Callable
+
+# Construct the judge function object
+updater_function: Callable[[], bool] = menta_instance.construct_judge_function(usages, judging_source=judging_source,
+                                                                               extra_context=extra_context)
+
+# Use the judge function to update the system
+updater_function()
+
+
+# Below is the equivalent implementation of the judge function, but is defined manually. 
+# It acts exactly the same as the `updater_function` above.
+def manual_judge_function() -> bool:
+    """Manually construct the judge function."""
+    seq_temp = temperature_sequence_sampler()
+    return (seq_temp[0] > 25 and seq_temp[2] < 50) or humidity_index_sampler(0) > 47
 ```
 
-In this scenario, `construct_updater` dynamically creates and executes a function based on the specified sampler usages
-and a logical condition (`judging_source`). This function then returns a result or triggers actions according to the
-given criteria (e.g., temperature and humidity conditions).
-
-Make sure to tailor the sampler functions, the logic expression string, and the usage of samplers to fit your specific
-application needs.
+In this case, a judge function closure is created using `exec()` method.Normally the built should have a better
+performance since the all the calls and variables are inlined and stored in the closure.
+---
 
 ## Botix
 
 Welcome to the guide on using Botix for state-transition control schema creation and compilation. This document will
 walk you through the steps to design a control schema using state and transition concepts, and then how to compile those
-schemas into executable closures using the Botix framework. Keep in mind that while this explanation avoids deep Python
-specifics, a basic understanding of programming concepts will be helpful.
+schemas into executable closures using the Botix framework.
 
 ### Understanding State-Transition Control Schema
 
@@ -119,11 +207,13 @@ these states are triggered by events or conditions, forming a **control schema**
 
 - In Botix, a state is represented by the `MovingState` class. Each state might have associated actions like setting
   motor speeds or changing direction.
+- A state describe the robot's **moving behavior**, 4 motor speeds in this case
 
 #### Transitions
 
 - Transitions between states are handled by the `MovingTransition` class. They define how and when the robot moves from
   one state to another, possibly based on sensor inputs or internal conditions.
+- Transitions describe how the robot **moves** from one state to another
 
 ### Building Your Control Schema
 
@@ -172,9 +262,10 @@ occur (using a breaker function), and the source and destination states.
 
 ```python
 from mentabotix import MovingTransition, MovingState
+from random import random
 
-sensor_reading = lambda: 25.5  # Example sensor reading function
-threshold = 25.0
+sensor_reading = lambda: random()  # Example sensor reading function
+threshold = 0.6
 
 
 def stop_condition() -> bool:  # the return type must be annotated, since an exception will be raised otherwise
@@ -326,7 +417,7 @@ Usage is as follows
 function_closure()
 ```
 
-Of course, you can also build a closure with branch logic in it.
+Of course, you can also build a closure with branching logic in it.
 
 ```python
 from mentabotix import MovingState, MovingTransition, Botix
