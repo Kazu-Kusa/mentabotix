@@ -542,6 +542,85 @@ compiled_closure: Callable[[], None] = botix.compile(return_median=False)
 compiled_closure()
 
 
+
+```
+
+### Schema Visualization
+
+Botix support schema visualization with `export_structure` method, which write Puml source code to a file.
+
+```python
+from mentabotix import MovingState, MovingTransition, Botix
+from bdmc import CloseLoopController, MotorInfo
+from typing import List
+import random
+
+# init the state-transition schema
+state_a = MovingState(100)
+state_b = MovingState(200)
+state_c = MovingState(300)
+state_d = MovingState(400)
+state_e = MovingState(500)
+state_f = MovingState(600)
+
+
+def transition_breaker_fac(lst: List[int]):
+    def _inner() -> int:
+        return random.choice(lst)
+
+    return _inner
+
+
+transition_a_bcd = MovingTransition(
+    duration=1,
+    from_states=state_a,
+    to_states={1: state_b, 2: state_c, 3: state_d},
+    breaker=transition_breaker_fac([1, 2, 3]),
+)
+transition_d_ef = MovingTransition(
+    duration=1,
+    from_states=state_d,
+    to_states={1: state_e, 2: state_f},
+    breaker=transition_breaker_fac([1, 2]),
+)
+
+# make the botix object
+botix = Botix(controller=CloseLoopController(motor_infos=[MotorInfo(i) for i in range(4)], port="COM3"))
+
+# add the transition
+botix.token_pool.extend([transition_a_bcd, transition_d_ef])
+
+# export the structure
+botix.export_structure("schema.puml")
+```
+
+The result will be written to `schema.puml` and below is the expected Puml source code.
+
+```plantuml
+@startuml
+state "5-MovingState(600, 600, 600, 600)" as state_6
+state "4-MovingState(500, 500, 500, 500)" as state_5
+state break_2 <<choice>>
+state "3-MovingState(400, 400, 400, 400)" as state_4
+state "2-MovingState(300, 300, 300, 300)" as state_3
+state "1-MovingState(200, 200, 200, 200)" as state_2
+state break_1 <<choice>>
+state "0-MovingState(100, 100, 100, 100)" as state_1
+state_1 --> break_1
+break_1 --> state_2: 1
+break_1 --> state_3: 2
+break_1 --> state_4: 3
+state_4 --> break_2
+break_2 --> state_5: 1
+break_2 --> state_6: 2
+
+[*] --> state_1
+
+state_2 --> [*]
+state_3 --> [*]
+state_5 --> [*]
+state_6 --> [*]
+@enduml
 ```
 
 ## Logging
