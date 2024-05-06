@@ -681,8 +681,13 @@ TokenPool: TypeAlias = List[MovingTransition]
 
 
 class Botix:
+    """
+    Args:
+        *controller* : A `CloseLoopController` object that represents the bot's controller.
+        *token_pool* : A `TokenPool` object that represents the bot's token pool.
+    """
 
-    def __init__(self, controller: CloseLoopController, token_pool: Optional[List[MovingTransition]] = None):
+    def __init__(self, controller: CloseLoopController, token_pool: Optional[TokenPool] = None):
         self.controller: CloseLoopController = controller
         self.token_pool: TokenPool = token_pool or []
 
@@ -1280,6 +1285,9 @@ class Botix:
                 else:
                     break_node_name: str = break_gen()
                     lines.insert(0, f"state {break_node_name} <<choice>>\n")
+                    lines.insert(
+                        1, f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n"
+                    )
                     lines.append(f"{from_state_alias} --> {break_node_name}\n")
                     for case_name, to_state in transition.to_states.items():
 
