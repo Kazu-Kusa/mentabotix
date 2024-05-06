@@ -506,7 +506,7 @@ class MovingState:
             case None, speeds:
                 state_tokens.append(f".set_motors_speed({tuple(speeds)})")
             case _:
-                raise RuntimeError("should never reach here")
+                raise TokenizeError("should never reach here")
 
         tokens: List[str] = before_enter_tokens + state_tokens + after_exiting_tokens
         return tokens, context
@@ -647,6 +647,12 @@ class MovingTransition:
                 tokens.append(f".delay_b({self.duration},{breaker_name},{self.check_interval})")
             case length if length > 1 and callable(self.breaker):
                 tokens.append(f".delay_b_match({self.duration},{breaker_name},{self.check_interval})")
+            case length if length > 1 and not callable(self.breaker):
+                raise TokenizeError(
+                    f"got branching states {self.to_states}, but not give correct breaker, {self.breaker} is not a callable."
+                )
+            case _:
+                raise TokenizeError(f"Undefined Error, got {self.to_states} and {self.breaker}.")
         return tokens, context
 
     def clone(self) -> Self:
