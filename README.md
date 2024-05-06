@@ -199,6 +199,13 @@ schemas into executable closures using the Botix framework.
 
 ### Understanding State-Transition Control Schema
 
+Let's start with the fundamental schema rules:
+> - A `MovingState` **MUST** connect exactly **ONE** `MovingTransition` as its input state.
+>- A `MovingTransition` **MUST** have at least **ONE** `MovingState` as either input or output.
+>- A State-Transition Control Schema **MUST** have **EXACTLY ONE** `MovingState` as its initial state and **AT LEAST ONE
+   ** `MovingState` as its final state.
+>- A State-Transition Control Schema **MUST NOT** have any loop, a correct control schema should always be a tree graph.
+
 Imagine you're designing an autonomous robot that needs to navigate different environments. Each behavior or action the
 robot can take is represented by a **state**, such as "moving forward," "turning left," or "halt." Transitions between
 these states are triggered by events or conditions, forming a **control schema**.
@@ -451,7 +458,7 @@ botix.token_pool.append(transition_start_a)
 botix.token_pool.append(transition_ab)
 botix.token_pool.append(transition_bc)
 
-# not compile the code into closure, just return the code lines and context, which is human readable.
+# not compile the code into closure, just return the code lines and context, which is human-readable.
 function_closure: Callable[[], None] = botix.compile(return_median=False)
 
 print(function_closure)
