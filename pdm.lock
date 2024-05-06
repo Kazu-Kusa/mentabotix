@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:2b9489942f690d03ee3e5d640d135872e720eba9575ba19a11dda1fe8a4e29ff"
+content_hash = "sha256:6273a347af0d8f096930432ac0bfe568b87e02e21bd69f4b2036c588c4a06506"
 
 [[package]]
 name = "bdmc"

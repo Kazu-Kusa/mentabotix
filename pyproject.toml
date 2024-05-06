@@ -1,6 +1,6 @@
 [project]
 name = "mentabotix"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Bot control lib"
 authors = [
     { name = "Whth", email = "88489697+Whth@users.noreply.github.com" },
@@ -8,10 +8,10 @@ authors = [
 dependencies = [
     "coloredlogs>=15.0.1",
     "numpy>=1.26.4",
-    "opencv-python-headless>=4.9.0.80",
     "pyapriltags>=3.3.0.3",
     "terminaltables>=3.1.10",
     "bdmc>=0.1.4",
+    "opencv-python-headless>=4.9.0.80",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
