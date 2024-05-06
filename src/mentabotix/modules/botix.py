@@ -1,3 +1,4 @@
+import inspect
 from collections import Counter
 from dataclasses import dataclass
 from inspect import signature, Signature
@@ -20,6 +21,7 @@ from typing import (
     ClassVar,
     Set,
     Sequence,
+    get_type_hints,
 )
 
 import numpy as np
@@ -44,6 +46,68 @@ Context: TypeAlias = Dict[str, Any]
 
 __PLACE_HOLDER__ = "Hello World"
 __CONTROLLER_NAME__ = "con"
+
+
+def get_function_annotations(func: Callable) -> str:
+    """
+    Get the function annotations of a given function.
+
+    Args:
+        func (callable): The function to get the annotations for.
+
+    Returns:
+        str: A string representation of the function annotations.
+    """
+    try:
+        # Get the function's signature
+        sig = inspect.signature(func)
+    except ValueError as e:
+        # Handle cases where func is not a valid function
+        raise ValueError(f"Invalid function: {func}") from e
+
+    # Get the type annotations
+    type_hints = get_type_hints(func)
+
+    # Initialize strings for parameter types and return type
+    param_types = []
+
+    for param_name, param in sig.parameters.items():
+        # Check if the parameter has an annotation
+        if param.annotation != inspect.Parameter.empty:
+            hint = type_hints.get(param_name)
+            # Convert the type hint to a string representation,
+            # handling complex hints like List[int] properly
+            param_type_str = convert_type_str(hint)
+            param_types.append(param_type_str)
+        else:
+            # Use 'Any' for parameters without annotations
+            param_types.append("Any")
+
+    # Handle the return type
+    return_type = convert_type_str(type_hints.get("return", Any))
+
+    # Concatenate the parameter type strings and return type to form the annotation string
+    params_str = ", ".join(param_types)
+    return f"{func.__name__}({params_str}) -> {return_type}"
+
+
+def convert_type_str(hint) -> str:
+    """
+    Convert a type hint to a string representation, handling complex types and generics.
+
+    Args:
+        hint: The type hint to convert.
+
+    Returns:
+        str: The string representation of the type hint.
+    """
+    if hint is None:
+        return "None"
+    elif hint in {int, float, bool, str, list, tuple, set, dict}:
+        return hint.__name__
+    else:
+        # For other types, convert directly to string
+        return str(hint).replace("typing.", "")
 
 
 class MovingState:
@@ -622,8 +686,7 @@ class Botix:
         self.controller: CloseLoopController = controller
         self.token_pool: TokenPool = token_pool or []
 
-    @staticmethod
-    def acquire_unique_start(token_pool: TokenPool, none_check: bool = True) -> MovingState | None:
+    def acquire_unique_start(self, token_pool: TokenPool, none_check: bool = True) -> MovingState | None:
         """
         Retrieves a unique starting state from the given token pool.
 
@@ -634,7 +697,40 @@ class Botix:
         Returns:
         - Either a MovingState or None. Returns the starting state (with indegree 0) if uniquely identified; based on none_check's value, either returns None or raises an exception.
         """
+        # Identifies states with an indegree of zero
+        zero_indegree_states = list(states_indegree := self.acquire_start_states(token_pool))
 
+        # Validates that there is exactly one state with an indegree of zero
+        if len(zero_indegree_states) == 1:
+            return zero_indegree_states[0]
+        else:
+            if none_check:
+                # Raises an error if none_check is enabled and no unique starting state is present
+                raise ValueError(f"There must be exactly one state with a zero indegree, got {states_indegree}")
+            return None
+
+    @staticmethod
+    def acquire_start_states(token_pool: TokenPool) -> Set[MovingState]:
+        """
+        Calculates the starting states in the given token pool.
+
+        Parameters:
+            token_pool (TokenPool): A list of MovingTransition objects representing the token pool.
+
+        Returns:
+            Set[MovingState]: A set of MovingState objects representing the starting states in the token pool.
+                The starting states are the states with an indegree of zero.
+
+        Algorithm:
+            1. Initialize a dictionary to hold the indegree of each state.
+            2. Calculate the indegree for each state by examining token transitions.
+            3. Identify states with an indegree of zero.
+            4. Return a set of MovingState objects representing the starting states.
+
+        Note:
+            - The indegree of a state is the number of tokens that can reach that state.
+            - A state is considered a starting state if it has an indegree of zero.
+        """
         # Initialize a dictionary to hold the indegree of each state
         states_indegree: Dict[MovingState, int] = {}
 
@@ -647,19 +743,11 @@ class Botix:
                 states_indegree[state] = states_indegree.get(state, 0) + 1
 
         # Identifies states with an indegree of zero
-        zero_indegree_states = [state for state, indegree in states_indegree.items() if indegree == 0]
-
-        # Validates that there is exactly one state with an indegree of zero
-        if len(zero_indegree_states) == 1:
-            return zero_indegree_states[0]
-        else:
-            if none_check:
-                # Raises an error if none_check is enabled and no unique starting state is present
-                raise ValueError(f"There must be exactly one state with a zero indegree, got {states_indegree}")
-            return None
+        zero_indegree_states = {state for state, indegree in states_indegree.items() if indegree == 0}
+        return zero_indegree_states
 
     @staticmethod
-    def acquire_end_state(token_pool: TokenPool) -> Set[MovingState]:
+    def acquire_end_states(token_pool: TokenPool) -> Set[MovingState]:
         """
         Calculates the end states of the given token pool.
 
@@ -681,6 +769,8 @@ class Botix:
         for token in token_pool:
             for from_state in token.from_states:
                 states_outdegree[from_state] = states_outdegree.get(from_state, 0) + 1
+            for to_state in token.to_states.values():
+                states_outdegree[to_state] = states_outdegree.get(to_state, 0)
 
         # Identify end states by finding states with an outdegree of 0.
         end_states = {state for state, outdegree in states_outdegree.items() if outdegree == 0}
@@ -967,7 +1057,7 @@ class Botix:
     def _check_met_requirements(self):
         self.ensure_structure_validity(self.token_pool)
         start_state = self.acquire_unique_start(self.token_pool)
-        end_states = self.acquire_end_state(self.token_pool)
+        end_states = self.acquire_end_states(self.token_pool)
         self.ensure_accessibility(self.token_pool, start_state, end_states)
         if self.acquire_loops():
             raise ValueError("Loops detected! All State-Transition should be implemented using breaker")
@@ -1147,6 +1237,71 @@ class Botix:
                 compiled_lines.append(line)
                 # If no forward transition is present, return the compiled lines
                 return compiled_lines
+
+    def export_structure(self, save_path: str, transitions: Optional[List[MovingTransition]] = None) -> Self:
+        """
+        Export the structure to a UML file based on the provided transitions.
+
+        Args:
+            save_path (str): The path to save the UML file.
+            transitions (Optional[List[MovingTransition]]): The list of transitions to represent in the UML.
+
+        Returns:
+            Self: The current instance.
+        """
+        transitions: TokenPool = transitions or self.token_pool
+        start_string = "@startuml\n"
+        end_string = "@enduml\n"
+
+        used_state: Dict[MovingState, str] = {}
+
+        lines: List[str] = []
+        name_gen: NameGenerator = NameGenerator(basename="state_")
+        break_gen: NameGenerator = NameGenerator(basename="break_")
+        for transition in transitions:
+            for from_state in transition.from_states:
+
+                if from_state in used_state:
+                    from_state_alias = used_state.get(from_state)
+                else:
+                    from_state_alias: str = name_gen()
+                    used_state[from_state] = from_state_alias
+                    lines.insert(0, f'state "{from_state}" as {from_state_alias}\n')
+
+                if len(transition.to_states) == 1:
+                    to_state = list(transition.to_states.values())[0]
+                    if to_state not in used_state:
+                        to_state_alias: str = name_gen()
+                        used_state[to_state] = to_state_alias
+                        lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
+                    else:
+                        to_state_alias = used_state.get(to_state)
+                    lines.append(f"{from_state_alias} --> {to_state_alias}\n")
+                else:
+                    break_node_name: str = break_gen()
+                    lines.insert(0, f"state {break_node_name} <<choice>>\n")
+                    lines.append(f"{from_state_alias} --> {break_node_name}\n")
+                    for case_name, to_state in transition.to_states.items():
+
+                        if to_state not in used_state:
+                            to_state_alias: str = name_gen()
+                            used_state[to_state] = to_state_alias
+                            lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
+                        else:
+                            to_state_alias = used_state.get(to_state)
+
+                        lines.append(f"{break_node_name} --> {to_state_alias}: {case_name}\n")
+
+        start_states = self.acquire_start_states(token_pool=transitions)
+        end_states = self.acquire_end_states(token_pool=transitions)
+
+        start_heads: List[str] = [f"[*] --> {used_state.get(sta)}\n" for sta in start_states]
+        end_heads: List[str] = [f"{used_state.get(sta)} --> [*]\n" for sta in end_states]
+
+        with open(save_path, "w") as f:
+
+            f.writelines([start_string, *lines, "\n", *start_heads, "\n", *end_heads, "\n", end_string])
+        return self
 
     def compile(self, return_median: bool = False) -> Callable[[], None] | Tuple[List[str], Context]:
         """
