@@ -601,10 +601,12 @@ The result will be written to `schema.puml` and below is the expected Puml sourc
 state "5-MovingState(600, 600, 600, 600)" as state_6
 state "4-MovingState(500, 500, 500, 500)" as state_5
 state break_2 <<choice>>
+note right of break_2: _inner() -> int
 state "3-MovingState(400, 400, 400, 400)" as state_4
 state "2-MovingState(300, 300, 300, 300)" as state_3
 state "1-MovingState(200, 200, 200, 200)" as state_2
 state break_1 <<choice>>
+note right of break_1: _inner() -> int
 state "0-MovingState(100, 100, 100, 100)" as state_1
 state_1 --> break_1
 break_1 --> state_2: 1
@@ -620,10 +622,14 @@ state_2 --> [*]
 state_3 --> [*]
 state_5 --> [*]
 state_6 --> [*]
+
 @enduml
+
 ```
+
 Below is the expected render result:
-![image](https://github.com/Kazu-Kusa/mentabotix/assets/88489697/bb9b9cbd-9319-4f0e-95e9-ce2ab886c8df)
+
+![image](docs/assets/state.png)
 
 ## Logging
 
