@@ -622,6 +622,8 @@ state_5 --> [*]
 state_6 --> [*]
 @enduml
 ```
+Below is the expected render result:
+![image](https://github.com/Kazu-Kusa/mentabotix/assets/88489697/bb9b9cbd-9319-4f0e-95e9-ce2ab886c8df)
 
 ## Logging
 
