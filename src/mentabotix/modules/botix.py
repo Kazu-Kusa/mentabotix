@@ -1,6 +1,7 @@
 import inspect
 from collections import Counter
 from dataclasses import dataclass
+from enum import Enum
 from inspect import signature, Signature
 from itertools import zip_longest
 from queue import Queue
@@ -44,8 +45,20 @@ IndividualExpressionPattern: TypeAlias = Tuple[Expression, Expression, Expressio
 KT = TypeVar("KT", bound=Hashable)
 Context: TypeAlias = Dict[str, Any]
 
+
 __PLACE_HOLDER__ = "Hello World"
 __CONTROLLER_NAME__ = "con"
+__MAGIC_SPLIT_CHAR__ = "$$$"
+
+
+class PatternType(Enum):
+    """
+    Three types of control cmd
+    """
+
+    Full = 1
+    LR = 2
+    Individual = 4
 
 
 def get_function_annotations(func: Callable) -> str:
@@ -138,6 +151,16 @@ class MovingState:
     __state_id_counter__: ClassVar[int] = 0
 
     @property
+    def pattern_type(self) -> PatternType:
+        """
+        Returns the pattern type of the state.
+
+        Returns:
+            PatternType: The pattern type of the state.
+        """
+        return self._pattern_type
+
+    @property
     def state_id(self) -> int:
         """
         Returns the state identifier.
@@ -207,6 +230,7 @@ class MovingState:
 
         Keyword Args:
             speed_expressions (Optional[FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]]): The speed expressions of the wheels.
+            used_context_variables (Optional[Set[str]]): The set of context variable names used in the speed expressions.
             before_entering (Optional[List[Callable[[], None]]]): The list of functions to be called before entering the state.
             after_exiting (Optional[List[Callable[[], None]]]): The list of functions to be called after exiting the state.
         Raises:
@@ -214,7 +238,7 @@ class MovingState:
         """
         self._speed_expressions: IndividualExpressionPattern
         self._speeds: np.array
-
+        self._pattern_type: PatternType
         match bool(speed_expressions), bool(speeds):
             case True, False:
                 if used_context_variables is None:
@@ -225,19 +249,21 @@ class MovingState:
                 self._speeds = None
                 match speed_expressions:
                     case str(full_expression):
+                        self._pattern_type = PatternType.Full
                         self._speed_expressions = (full_expression, full_expression, full_expression, full_expression)
                     case (left_expression, right_expression):
                         if all(isinstance(item, int) for item in speed_expressions):
                             raise ValueError(
                                 f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}"
                             )
-
+                        self._pattern_type = PatternType.LR
                         self._speed_expressions = (left_expression, left_expression, right_expression, right_expression)
                     case speed_expressions if len(speed_expressions) == 4:
                         if all(isinstance(item, int) for item in speed_expressions):
                             raise ValueError(
                                 f"All expressions are integers. You should use *speeds argument to create the MovingState, got {speed_expressions}"
                             )
+                        self._pattern_type = PatternType.Individual
                         self._speed_expressions = speed_expressions
                     case _:
                         types = tuple(type(item) for item in speed_expressions)
@@ -249,11 +275,15 @@ class MovingState:
                 self._speed_expressions = None
                 match speeds:
                     case (int(full_speed),):
+                        self._pattern_type = PatternType.Full
                         self._speeds = np.full((4,), full_speed)
-
                     case (int(left_speed), int(right_speed)):
+                        self._pattern_type = PatternType.LR
+
                         self._speeds = np.array([left_speed, left_speed, right_speed, right_speed])
                     case speeds if len(speeds) == 4 and all(isinstance(item, int) for item in speeds):
+                        self._pattern_type = PatternType.Individual
+
                         self._speeds = np.array(speeds)
                     case _:
                         types = tuple(type(item) for item in speeds)
@@ -283,7 +313,7 @@ class MovingState:
         used_context_variables: Set[str], speed_expressions: IndividualExpressionPattern
     ) -> None:
         for variable in used_context_variables:
-            if any(variable in expression for expression in speed_expressions):
+            if any(variable in str(expression) for expression in speed_expressions):
                 continue
             raise ValueError(f"Variable {variable} not found in {speed_expressions}.")
 
@@ -488,19 +518,69 @@ class MovingState:
 
                 getter_function_name_generator = NameGenerator(f"state{self._identifier}_context_getter_")
                 getter_temp_name_generator = NameGenerator(f"state{self._identifier}_context_getter_temp_")
-                input_arg_string = str(tuple(expression)).replace("'", "")
-                for varname in self._used_context_variables:
-                    # Create context retrieval functions using expressions
-                    fn: Callable[[], Any] = con.register_context_getter(varname)
-                    context[(getter_func_var_name := getter_function_name_generator())] = fn
-                    temp_name = getter_temp_name_generator()
-                    if input_arg_string.count(varname) == 1:
-                        input_arg_string = input_arg_string.replace(varname, f"{getter_func_var_name}()", 1)
-                    else:
-                        input_arg_string = input_arg_string.replace(
-                            varname, f"({temp_name}:={getter_func_var_name}())", 1
+                expression_final_value_temp = NameGenerator(f"state{self._identifier}_val_tmp")
+                input_arg_string: str = str(tuple(expression)).replace("'", "")
+
+                match self._pattern_type:
+                    case PatternType.Full:
+                        expression: Tuple[str, str, str, str]
+                        val_temp_name: str = expression_final_value_temp()
+                        full_expression = expression[0]
+                        for varname in self._used_context_variables:
+
+                            # Create context retrieval functions using expressions
+                            fn: Callable[[], Any] = con.register_context_getter(varname)
+                            context[getter_func_var_name := getter_function_name_generator()] = fn
+                            full_expression = self._replace_var(
+                                full_expression, varname, getter_func_var_name, getter_temp_name_generator()
+                            )
+
+                        input_arg_string = (
+                            f"({val_temp_name}:=({full_expression}),{val_temp_name},{val_temp_name},{val_temp_name})"
                         )
-                        input_arg_string = input_arg_string.replace(varname, temp_name)
+                    case PatternType.LR:
+                        expression: IndividualExpressionPattern
+                        l_val_temp_name: str = expression_final_value_temp()
+                        r_val_temp_name: str = expression_final_value_temp()
+                        lr_expression: str = f"{expression[0]}{__MAGIC_SPLIT_CHAR__}{expression[-1]}"
+                        for varname in self._used_context_variables:
+
+                            # Create context retrieval functions using expressions
+                            fn: Callable[[], Any] = con.register_context_getter(varname)
+                            context[getter_func_var_name := getter_function_name_generator()] = fn
+                            lr_expression = self._replace_var(
+                                lr_expression, varname, getter_func_var_name, getter_temp_name_generator()
+                            )
+                        left_expression, right_expression = lr_expression.split(__MAGIC_SPLIT_CHAR__)
+
+                        match isinstance(expression[0], int), isinstance(expression[-1], int):
+                            case True, True:
+                                raise TokenizeError(f"Should never be here!")
+                            case False, False:
+
+                                input_arg_string = f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
+                            case False, True:
+                                input_arg_string = f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{right_expression},{right_expression})"
+                            case True, False:
+                                input_arg_string = f"({left_expression},{left_expression},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
+
+                    case PatternType.Individual:
+                        for varname in self._used_context_variables:
+
+                            # Create context retrieval functions using expressions
+                            fn: Callable[[], Any] = con.register_context_getter(varname)
+                            context[(getter_func_var_name := getter_function_name_generator())] = fn
+                            temp_name = getter_temp_name_generator()
+
+                            if input_arg_string.count(varname) == 1:
+                                input_arg_string = input_arg_string.replace(varname, f"{getter_func_var_name}()", 1)
+                            else:
+                                input_arg_string = input_arg_string.replace(
+                                    varname, f"({temp_name}:={getter_func_var_name}())", 1
+                                )
+                                input_arg_string = input_arg_string.replace(varname, temp_name)
+                    case _:
+                        raise TokenizeError(f"Unknown expression type, got {self._pattern_type}")
                 state_tokens.append(f".set_motors_speed({input_arg_string})")
 
             case None, speeds:
@@ -510,6 +590,13 @@ class MovingState:
 
         tokens: List[str] = before_enter_tokens + state_tokens + after_exiting_tokens
         return tokens, context
+
+    @staticmethod
+    def _replace_var(source: str, var_name: str, func_name: str, temp_name: str) -> str:
+        if source.count(var_name) == 1:
+            return source.replace(var_name, f"{func_name}()", 1)
+        else:
+            return source.replace(var_name, f"({temp_name}:={func_name}())", 1).replace(var_name, temp_name)
 
     def __hash__(self) -> int:
         return self._identifier
