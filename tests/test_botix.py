@@ -329,6 +329,30 @@ class TestBotix(unittest.TestCase):
         self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
         self.botix_instance.export_structure("test.puml")
 
+    def test_compile_expressions(self):
+        MovingState.__state_id_counter__ = 0
+        MovingTransition.__state_id_counter__ = 0
+
+        state_a = MovingState(speed_expressions="var1", used_context_variables=["var1"])
+        state_b = MovingState(speed_expressions=("var1", "var2"), used_context_variables=["var1", "var2"])
+        state_c = MovingState(
+            speed_expressions=("var1", "var2", "var3", "var4"), used_context_variables=["var1", "var2", "var3", "var4"]
+        )
+        state_d = MovingState(speed_expressions=("var1", 100), used_context_variables=["var1"])
+        state_e = MovingState(
+            speed_expressions=("var1", "var2", "var3", 666), used_context_variables=["var1", "var2", "var3"]
+        )
+        state_f = MovingState(speed_expressions=(500, "var1"), used_context_variables=["var1"])
+
+        state_g = MovingState(speed_expressions=("var1", "var2*var1"), used_context_variables=["var1", "var2"])
+        states = [state_a, state_b, state_c, state_d, state_e, state_f, state_g]
+        std_out = ""
+        for state in states:
+            std_out += str(state.tokenize(self.botix_instance.controller)[0][0])
+
+        correct = ".set_motors_speed((state0_val_tmp1:=(state0_context_getter_1()),state0_val_tmp1,state0_val_tmp1,state0_val_tmp1)).set_motors_speed((state1_val_tmp1:=(state1_context_getter_1()),state1_val_tmp1,state1_val_tmp2:=(state1_context_getter_2()),state1_val_tmp2)).set_motors_speed((state2_context_getter_1(), state2_context_getter_2(), state2_context_getter_3(), state2_context_getter_4())).set_motors_speed((state3_val_tmp1:=(state3_context_getter_1()),state3_val_tmp1,100,100)).set_motors_speed((state4_context_getter_1(), state4_context_getter_2(), state4_context_getter_3(), 666)).set_motors_speed((500,500,state5_val_tmp2:=(state5_context_getter_1()),state5_val_tmp2)).set_motors_speed((state6_val_tmp1:=((state6_context_getter_temp_1:=state6_context_getter_1())),state6_val_tmp1,state6_val_tmp2:=(state6_context_getter_2()*state6_context_getter_temp_1),state6_val_tmp2))"
+        self.assertEqual(correct, std_out)
+
 
 if __name__ == "__main__":
     unittest.main()

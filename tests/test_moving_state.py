@@ -25,7 +25,7 @@ class TestMovingState(unittest.TestCase):
         self.assertEqual(state_individual.unwrap(), (10, 20, 30, 40))
 
     def test_init_speed_expressions(self):
-        used_context_variables = {"var1", "var2"}
+        used_context_variables = ["var1", "var2"]
 
         # Test FullExpressionPattern
         state_full_expr = MovingState(speed_expressions="var1+var2", used_context_variables=used_context_variables)
@@ -50,7 +50,7 @@ class TestMovingState(unittest.TestCase):
             MovingState(1, 2, 3, 5, speed_expressions=("expr1", "expr2"))
 
         with self.assertRaises(ValueError):
-            MovingState(speed_expressions=("expr1", "expr2"), used_context_variables={"var1", "var2"})
+            MovingState(speed_expressions=("expr1", "expr2"), used_context_variables=["var1", "var2"])
 
     def test_class_methods(self):
         # Test halt
@@ -102,7 +102,7 @@ class TestMovingState(unittest.TestCase):
 
         con_mock = Mock(
             spec=CloseLoopController(
-                [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM3", context={"var1": 10, "var2": 20}
+                [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM4", context={"var1": 10, "var2": 20}
             )
         )
 
@@ -113,7 +113,7 @@ class TestMovingState(unittest.TestCase):
 
         state_with_expressions = MovingState(
             speed_expressions=("var1", "var2", "var1+var2", "2*var1-var2"),
-            used_context_variables={"var1", "var2"},
+            used_context_variables=["var1", "var2"],
         )
         tokens, context = state_with_expressions.tokenize(con_mock)
         self.assertCountEqual(
@@ -149,7 +149,7 @@ class TestMovingState(unittest.TestCase):
     def test_str(self):
         state = MovingState(10, 20, 30, 40)
         self.assertEqual(str(state), f"{state.state_id}-MovingState(10, 20, 30, 40)")
-        state = MovingState(speed_expressions="var1", used_context_variables={"var1"})
+        state = MovingState(speed_expressions="var1", used_context_variables=["var1"])
         self.assertEqual(str(state), f"{state.state_id}-MovingState('var1', 'var1', 'var1', 'var1')")
 
 

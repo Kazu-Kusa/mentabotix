@@ -191,12 +191,12 @@ class MovingState:
         return self._after_exiting
 
     @property
-    def used_context_variables(self) -> Set[str]:
+    def used_context_variables(self) -> List[str]:
         """
         Returns the set of context variable names used in the speed expressions.
 
         :return: An optional set of strings representing the context variable names.
-        :rtype: Optional[Set[str]]
+        :rtype: Optional[List[str]]
         """
         return self._used_context_variables
 
@@ -214,7 +214,7 @@ class MovingState:
         self,
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
         speed_expressions: Optional[FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
-        used_context_variables: Optional[Set[str]] = None,
+        used_context_variables: Optional[List[str]] = None,
         before_entering: Optional[List[Callable[[], None]]] = None,
         after_exiting: Optional[List[Callable[[], None]]] = None,
     ) -> None:
@@ -230,7 +230,7 @@ class MovingState:
 
         Keyword Args:
             speed_expressions (Optional[FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]]): The speed expressions of the wheels.
-            used_context_variables (Optional[Set[str]]): The set of context variable names used in the speed expressions.
+            used_context_variables (Optional[List[str]]): The set of context variable names used in the speed expressions.
             before_entering (Optional[List[Callable[[], None]]]): The list of functions to be called before entering the state.
             after_exiting (Optional[List[Callable[[], None]]]): The list of functions to be called after exiting the state.
         Raises:
@@ -301,17 +301,19 @@ class MovingState:
                 )
 
         if used_context_variables:
-            self._validate_used_context_variables_presence(used_context_variables, self._speed_expressions)
+            self._validate_used_context_variables(used_context_variables, self._speed_expressions)
         self._before_entering: List[Callable[[], None]] = before_entering
-        self._used_context_variables: Set[str] = used_context_variables
+        self._used_context_variables: List[str] = used_context_variables
         self._after_exiting: List[Callable[[], None]] = after_exiting
         self._identifier: int = MovingState.__state_id_counter__
         MovingState.__state_id_counter__ += 1
 
     @staticmethod
-    def _validate_used_context_variables_presence(
-        used_context_variables: Set[str], speed_expressions: IndividualExpressionPattern
+    def _validate_used_context_variables(
+        used_context_variables: List[str], speed_expressions: IndividualExpressionPattern
     ) -> None:
+        if len(used_context_variables) != len(set(used_context_variables)):
+            raise ValueError(f"used_context_variables can't contain duplicated item!")
         for variable in used_context_variables:
             if any(variable in str(expression) for expression in speed_expressions):
                 continue
