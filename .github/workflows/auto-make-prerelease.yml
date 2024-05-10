@@ -1,0 +1,33 @@
+name: Release EasyCmd
+on:
+  push:
+    tags:
+      - 'v0.*'
+
+
+jobs:
+  publishGitRelease:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
+
+      - uses: pdm-project/setup-pdm@v3
+      - name: Install dependencies
+        run: pdm install
+      - name: Build package
+        run: pdm build
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          draft: true
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: true
