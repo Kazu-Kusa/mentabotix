@@ -1,6 +1,6 @@
 [project]
 name = "mentabotix"
-version = "0.1.2"
+version = "0.1.3a"
 description = "A Bot control lib"
 authors = [
     { name = "Whth", email = "88489697+Whth@users.noreply.github.com" },
@@ -29,5 +29,7 @@ distribution = true
 dev = [
     "viztracer>=0.16.2",
     "pytest>=8.1.1",
+    "matplotlib>=3.8.4",
 ]
+
 
