@@ -213,6 +213,32 @@ class TestComposer(unittest.TestCase):
                 breaker="not a callable",
             )
 
+    def test_mk(self):
+        from mentabotix import MovingChainComposer, MovingState, MovingTransition
+
+        # init the state-transition composer
+        comp = MovingChainComposer()
+
+        # add some states and transitions one by one to the composer, the composer will auto-connect the states and transitions
+        (
+            comp.add(MovingState(0))
+            .add(MovingTransition(0.2))
+            .add(MovingState(1000))
+            .add(MovingTransition(0.3))
+            .add(MovingState(2000))
+        )
+
+        # export the structure
+        states, transitions = comp.export_structure()
+
+        # let's use botix to make the visualization!
+        # first make the botix object
+        con = CloseLoopController(motor_infos=[MotorInfo(i) for i in range(4)])
+        botix = Botix(controller=con, token_pool=transitions)
+
+        # make the visualization
+        botix.export_structure("composed.puml")
+
 
 if __name__ == "__main__":
     unittest.main()

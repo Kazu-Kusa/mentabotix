@@ -105,7 +105,7 @@ class MovingChainComposer:
             if self.last_transition:
                 self.last_transition.to_states[__PLACE_HOLDER__] = unit
         elif unit_type == MovingTransition:
-            unit.from_states.append(unit)
+            unit.from_states.append(self.last_state)
             self._chain_container[MovingTransition].append(unit)
         else:
             raise RuntimeError("Should never reach here!")
