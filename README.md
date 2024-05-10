@@ -638,6 +638,58 @@ Below is the expected render result:
 
 ![image](docs/assets/state.png)
 
+### Use State-Transition Composer
+
+State-Transition Composer is a tool that helps you to design and compile state-transition control schema.
+
+```python
+from mentabotix import MovingChainComposer, MovingState, MovingTransition, Botix
+from bdmc import CloseLoopController, MotorInfo
+
+# init the state-transition composer
+comp = MovingChainComposer()
+
+# add some states and transitions one by one to the composer, the composer will auto-connect the states and transitions
+(comp
+ .add(MovingState(0))
+ .add(MovingTransition(0.2))
+ .add(MovingState(1000))
+ .add(MovingTransition(0.3))
+ .add(MovingState(2000)))
+
+# export the structure
+states, transitions = comp.export_structure()
+
+# let's use botix to make the visualization!
+# first make the botix object
+con = CloseLoopController(motor_infos=[MotorInfo(i) for i in range(4)])
+botix = Botix(controller=con)
+
+# make the visualization
+botix.export_structure("composed.puml", transitions=transitions)
+```
+
+The exported structure will be written to `composed.puml`, and below is the expected Puml source code.
+
+```plantuml
+@startuml
+state "3-MovingState(2000, 2000, 2000, 2000)" as state_3
+state "2-MovingState(1000, 1000, 1000, 1000)" as state_2
+state "1-MovingState(0, 0, 0, 0)" as state_1
+state_1 --> state_2
+state_2 --> state_3
+
+[*] --> state_1
+
+state_3 --> [*]
+
+@enduml
+```
+
+The render result is shown below:
+
+![image](docs/assets/composed.png)
+
 ## Logging
 
 use `set_log_level` to silent the console to improve the performance in high pressure conditions
