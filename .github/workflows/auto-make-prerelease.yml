@@ -23,6 +23,12 @@ jobs:
       - name: Build package
         run: pdm build
 
+      - name: Publish package
+        env:
+          PDM_PUBLISH_USERNAME: __token__
+          PDM_PUBLISH_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: pdm publish
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
