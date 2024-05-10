@@ -221,10 +221,10 @@ class TestBotix(unittest.TestCase):
         # Test _assembly_match_cases
         expected_match_cases = [
             "match some_variable:",
-            "    case case1:",
+            "    case 'case1':",
             "        result1",
             "            more_result1",
-            "    case case2:",
+            "    case 'case2':",
             "        result2",
         ]
         self.assertEqual(test_instance._assembly_match_cases(match_expression, cases), expected_match_cases)

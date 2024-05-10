@@ -46,7 +46,7 @@ KT = TypeVar("KT", bound=Hashable)
 Context: TypeAlias = Dict[str, Any]
 
 
-__PLACE_HOLDER__ = "Hello World"
+__PLACE_HOLDER__ = 0
 __CONTROLLER_NAME__ = "con"
 __MAGIC_SPLIT_CHAR__ = "$$$"
 
@@ -726,15 +726,16 @@ class MovingTransition:
         tokens: List[str] = []
         context: Context = {}
         name_generator: NameGenerator = NameGenerator(f"transition{self._transition_id}_breaker_")
-        context[(breaker_name := name_generator())] = self.breaker
         match len(self.to_states):
             case 0:
                 raise TokenizeError(f"Transition must have at least one to_state, got {self.to_states}.")
             case 1 if not callable(self.breaker):
                 tokens.append(f".delay({self.duration})")
             case 1 if callable(self.breaker):
+                context[(breaker_name := name_generator())] = self.breaker
                 tokens.append(f".delay_b({self.duration},{breaker_name},{self.check_interval})")
             case length if length > 1 and callable(self.breaker):
+                context[(breaker_name := name_generator())] = self.breaker
                 tokens.append(f".delay_b_match({self.duration},{breaker_name},{self.check_interval})")
             case length if length > 1 and not callable(self.breaker):
                 raise TokenizeError(
@@ -1162,7 +1163,7 @@ class Botix:
         if self.acquire_loops():
             raise ValueError("Loops detected! All State-Transition should be implemented using breaker")
 
-    def _assembly_match_cases(self, match_expression: str | List[str], cases: Dict[str, str | List[str]]) -> List[str]:
+    def _assembly_match_cases(self, match_expression: str | List[str], cases: Dict[KT, str | List[str]]) -> List[str]:
         """
         Assembles a list of strings representing match cases based on the given match expression and cases dictionary.
 
@@ -1177,7 +1178,8 @@ class Botix:
 
         lines: List[str] = [f"match {match_expression}:"]
         for key, value in cases.items():
-            lines.append(self._add_indent(f"case {key}:", count=1))
+            case_expr: str = f"'{key}'" if isinstance(key, str) else f"{key}"
+            lines.append(self._add_indent(f"case {case_expr}:", count=1))
             lines.extend(self._add_indent(value.split("\n") if isinstance(value, str) else value, count=2))
         return lines
 
@@ -1326,9 +1328,9 @@ class Botix:
                 branch_transition, branch_context = connected_forward_transition.tokenize()
                 context.update(branch_context)
                 match_expr = line + "".join(branch_transition)
-                match_branch: Dict[str, List[str]] = {}
+                match_branch: Dict[KT, List[str]] = {}
                 for case, value in connected_forward_transition.to_states.items():
-                    match_branch[str(case)] = self._recursive_compile_tokens(
+                    match_branch[case] = self._recursive_compile_tokens(
                         start=value, context=context, controller_name=controller_name
                     )
                 lines = self._assembly_match_cases(match_expression=match_expr, cases=match_branch)
