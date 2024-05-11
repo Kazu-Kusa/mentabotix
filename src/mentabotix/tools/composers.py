@@ -180,3 +180,21 @@ def straight_chain(
         case _:
             # If breaker is neither None nor callable, raise an error
             raise ValueError("breaker must be callable or None")
+
+
+def scanning_chain():
+    """
+    A function that calculates the states and transitions for a scanning chain.
+    Returns:
+
+    """
+    raise NotImplementedError
+
+
+def snaking_chain():
+    """
+    A function that calculates the states and transitions for a snaking chain.
+    Returns:
+
+    """
+    raise NotImplementedError

@@ -6,15 +6,17 @@ import warnings
 from copy import deepcopy
 from threading import Thread
 from time import sleep
-from typing import Tuple, List, Dict, Optional, Literal
+from typing import Tuple, List, Dict, Optional, Literal, Union
 
 import cv2
 from cv2 import Mat, cvtColor, COLOR_RGB2GRAY
+from numpy import ndarray, array
+from numpy.linalg import linalg
 from pyapriltags import Detector, Detection
 
-from ..tools.algrithm_tools import calc_p2p_dst, calc_p2p_error
+DetectResult = Union[Detection, None]
 
-DEFAULT_TAG_TABLE = {2: (None, 0.0), 1: (None, 0.0), 0: (None, 0.0)}
+DEFAULT_TAG_TABLE: Dict[int, Tuple[DetectResult, float]] = {2: (None, 0.0), 1: (None, 0.0), 0: (None, 0.0)}
 
 DEFAULT_TAG_ID = -1
 
@@ -28,7 +30,7 @@ BLUE_TEAM = "blue"
 YELLOW_TEAM = "yellow"
 
 
-def get_center_tag(frame_center: Tuple[int, int], tags: List):
+def get_center_tag(frame_center: ndarray, tags: List[Detection]):
     """
     get the tag in which is the nearest to the frame center
     Args:
@@ -43,7 +45,11 @@ def get_center_tag(frame_center: Tuple[int, int], tags: List):
     closest_dist = float("inf")
     for tag in tags:
         # 计算当前 AprilTag 中心点与图像中心的距离
-        dist = calc_p2p_dst(tag.center, frame_center)
+        # Convert tuples to NumPy arrays if necessary
+        point_1 = array(tag.center)
+        point_2 = array(frame_center)
+        # Calculate Euclidean distance using NumPy's vectorized operations
+        dist = linalg.norm(tag.center - frame_center)
         if dist < closest_dist:
             closest_dist = dist
             closest_tag = tag
@@ -125,7 +131,7 @@ class TagDetector:
         return self._team_color
 
     @team_color.setter
-    def team_color(self, team_color: str = BLUE_TEAM):
+    def team_color(self, team_color: Literal["blue", "yellow"] = BLUE_TEAM):
         """
         set the ally/enemy tag according the team color
         yellow: ally: 2 | enemy: 1|neutral: 0
@@ -203,7 +209,11 @@ class TagDetector:
         # override old tags
         temp_dict = deepcopy(DEFAULT_TAG_TABLE)
         for tag in self.__tag_detect(cvtColor(frame, COLOR_RGB2GRAY)):
-            temp_dict[tag.tag_id] = (tag, calc_p2p_error(tag.center, self._frame_center))
+            # Convert tuples to NumPy arrays if necessary
+            start = array(tag.center)
+            target = array(self._frame_center)
+            # Calculate Manhattan distance using absolute differences and summing them up
+            temp_dict[tag.tag_id] = (tag, sum(abs(tag.center - self._frame_center)))
         self._tags_table = temp_dict
 
     def _update_tag_id(self):

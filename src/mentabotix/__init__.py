@@ -3,7 +3,8 @@ from .modules.exceptions import BadSignatureError, RequirementError, SamplerType
 from .modules.logger import set_log_level
 from .modules.menta import Menta, SequenceSampler, IndexedSampler, DirectSampler, SamplerUsage, SamplerType, Sampler
 
-from .tools.composers import MovingChainComposer, straight_chain
+from .tools.composers import MovingChainComposer, straight_chain, snaking_chain, scanning_chain
+from .tools.generators import NameGenerator, Multipliers, make_multiplier_generator
 from .vision.camra import Camera
 from .vision.tagdetector import TagDetector
 
@@ -30,7 +31,12 @@ __all__ = [
     "SamplerTypeError",
     "TokenizeError",
     "StructuralError",
-    # tools
+    # tools/composers
     "MovingChainComposer",
     "straight_chain",
+    "snaking_chain",
+    "scanning_chain",
+    # tools/generators
+    "NameGenerator",
+    "Multipliers",
 ]
