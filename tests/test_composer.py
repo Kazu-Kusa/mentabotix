@@ -72,8 +72,7 @@ class TestComposer(unittest.TestCase):
 
     def test_init_container(self):
         self.moving_chain_composer.add(MovingState(0))
-        self.moving_chain_composer.init_container()
-        self.moving_chain_composer.add(MovingState(0))
+        self.moving_chain_composer.init_container().add(MovingState(0))
 
     def test_export_structure(self):
         # Test with no units

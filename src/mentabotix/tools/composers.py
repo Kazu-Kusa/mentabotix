@@ -53,7 +53,7 @@ class MovingChainComposer:
     def _flip(self):
         self._type_container.reverse()
 
-    def init_container(self) -> None:
+    def init_container(self) -> Self:
         """
         Initializes the chain container by clearing all the lists in the `_chain_container` dictionary.
         If the `next_need` is not `MovingState`, the `_type_container` list is reversed.
@@ -62,12 +62,13 @@ class MovingChainComposer:
             self (MovingChainComposer): The instance of the class.
 
         Returns:
-            None: This function does not return anything.
+            Self: The current instance of the class.
         """
         if self.next_need != MovingState:
             self._flip()
         for cont in self._chain_container.values():
             cont.clear()
+        return self
 
     def export_structure(self) -> StateTransitionPack:
         """
