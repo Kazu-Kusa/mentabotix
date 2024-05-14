@@ -72,28 +72,34 @@ class Menta:
         self.sampler_types.clear()  # 清空当前的采样器类型列表
         for sampler in self.samplers:  # 遍历所有采样器
             sig = signature(sampler)  # 获取采样器的签名
-
-            match sig.return_annotation:  # 根据采样器的返回类型进行匹配
-                case seq_sampler_ret if issubclass(seq_sampler_ret, Sequence) and len(sig.parameters) == 0:
-                    # 如果返回类型是序列且无参数，则认定为序列采样器
-                    self.sampler_types.append(SamplerType.SEQ_SAMPLER)
-                case idx_sampler_ret if len(sig.parameters) == 1 and isinstance(idx_sampler_ret, self.__supported__):
-                    # 如果返回类型是索引且只有一个参数，则认定为索引采样器
-                    self.sampler_types.append(SamplerType.IDX_SAMPLER)
-                case drc_sampler_ret if len(sig.parameters) == 0 and isinstance(drc_sampler_ret, self.__supported__):
-                    # 如果返回类型是直接响应且无参数，则认定为直接响应采样器
-                    self.sampler_types.append(SamplerType.DRC_SAMPLER)
-                case Signature.empty:
-                    # 如果采样器没有指定返回类型，则抛出异常
-                    raise BadSignatureError(
-                        f"Sampler {sampler} must have annotated return type!\nGot {sig.return_annotation}"
-                    )
-                case invalid_sampler_ret:
-                    # 如果采样器的返回类型注解无效，则抛出异常
-                    raise BadSignatureError(
-                        f"Sampler {sampler} has invalid return type annotation(s)!\n"
-                        f"Must be {SensorDataSequence} or {SensorData} but got {invalid_sampler_ret}"
-                    )
+            try:
+                match sig.return_annotation:  # 根据采样器的返回类型进行匹配
+                    case seq_sampler_ret if issubclass(seq_sampler_ret, Sequence) and len(sig.parameters) == 0:
+                        # 如果返回类型是序列且无参数，则认定为序列采样器
+                        self.sampler_types.append(SamplerType.SEQ_SAMPLER)
+                    case idx_sampler_ret if len(sig.parameters) == 1 and isinstance(
+                        idx_sampler_ret, self.__supported__
+                    ):
+                        # 如果返回类型是索引且只有一个参数，则认定为索引采样器
+                        self.sampler_types.append(SamplerType.IDX_SAMPLER)
+                    case drc_sampler_ret if len(sig.parameters) == 0 and isinstance(
+                        drc_sampler_ret, self.__supported__
+                    ):
+                        # 如果返回类型是直接响应且无参数，则认定为直接响应采样器
+                        self.sampler_types.append(SamplerType.DRC_SAMPLER)
+                    case Signature.empty:
+                        # 如果采样器没有指定返回类型，则抛出异常
+                        raise BadSignatureError(
+                            f"Sampler {sampler} must have annotated return type!\nGot {sig.return_annotation}"
+                        )
+                    case invalid_sampler_ret:
+                        # 如果采样器的返回类型注解无效，则抛出异常
+                        raise BadSignatureError(
+                            f"Sampler {sampler} has invalid return type annotation(s)!\n"
+                            f"Must be {SensorDataSequence} or {SensorData} but got {invalid_sampler_ret}"
+                        )
+            except TypeError:
+                raise BadSignatureError(f"Sampler {sampler} has invalid signature!\nGot {sig}")
         return self  # 返回更新后的实例自身
 
     def construct_updater(self, usages: List[SamplerUsage]) -> Callable[[], Tuple] | Callable[[], SensorData]:
