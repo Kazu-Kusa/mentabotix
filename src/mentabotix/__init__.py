@@ -5,7 +5,6 @@ from .modules.menta import Menta, SequenceSampler, IndexedSampler, DirectSampler
 
 from .tools.composers import MovingChainComposer, straight_chain, snaking_chain, scanning_chain
 from .tools.generators import NameGenerator, Multipliers, make_multiplier_generator
-from .vision.camra import Camera
 from .vision.tagdetector import TagDetector
 
 __all__ = [
@@ -23,7 +22,6 @@ __all__ = [
     "SamplerType",
     "Sampler",
     # vision
-    "Camera",
     "TagDetector",
     # exceptions
     "BadSignatureError",

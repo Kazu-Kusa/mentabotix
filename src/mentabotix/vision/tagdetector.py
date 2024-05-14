@@ -2,58 +2,19 @@
 apriltag detecting app
 """
 
-import warnings
-from copy import deepcopy
+from dataclasses import dataclass
 from threading import Thread
 from time import sleep
-from typing import Tuple, List, Dict, Optional, Literal, Union
+from typing import List, Literal, Self, Any, Callable, Optional
 
 import cv2
+import numpy as np
 from cv2 import Mat, cvtColor, COLOR_RGB2GRAY
-from numpy import ndarray, array
+from numpy import ndarray, dtype, generic
 from numpy.linalg import linalg
 from pyapriltags import Detector, Detection
 
-DetectResult = Union[Detection, None]
-
-DEFAULT_TAG_TABLE: Dict[int, Tuple[DetectResult, float]] = {2: (None, 0.0), 1: (None, 0.0), 0: (None, 0.0)}
-
-DEFAULT_TAG_ID = -1
-
-NULL_TAG = -999
-
-TABLE_INIT_VALUE = (None, 0.0)
-
-CAMERA_RESOLUTION_MULTIPLIER = 0.4
-
-BLUE_TEAM = "blue"
-YELLOW_TEAM = "yellow"
-
-
-def get_center_tag(frame_center: ndarray, tags: List[Detection]):
-    """
-    get the tag in which is the nearest to the frame center
-    Args:
-        frame_center:
-        tags:
-
-    Returns:
-
-    """
-    # 获取离图像中心最近的 AprilTag
-    closest_tag = None
-    closest_dist = float("inf")
-    for tag in tags:
-        # 计算当前 AprilTag 中心点与图像中心的距离
-        # Convert tuples to NumPy arrays if necessary
-        point_1 = array(tag.center)
-        point_2 = array(frame_center)
-        # Calculate Euclidean distance using NumPy's vectorized operations
-        dist = linalg.norm(tag.center - frame_center)
-        if dist < closest_dist:
-            closest_dist = dist
-            closest_tag = tag
-    return closest_tag
+from ..modules.logger import _logger
 
 
 class TagDetector:
@@ -68,239 +29,235 @@ class TagDetector:
         refine_edges=False,
         debug=False,
     )
-    __tag_detect = detector.detect
 
-    def __init__(
-        self,
-        cam_id: int,
-        team_color: Literal["blue", "yellow"],
-        start_detect_tag: bool = True,
-        single_tag_mode: bool = True,
-        minimal_resolution: bool = True,
-    ):
+    @dataclass
+    class Config:
+        single_tag_mode: bool = True
+        resolution_multiplier: float = 0.5
+        ordering_method: Literal["nearest", "single"] = "nearest"
+        halt_check_interval: float = 0.4
+        default_tag_id: int = -1
+        error_tag_id: int = -10
+
+    def __init__(self, cam_id: int = 0, resolution_multiplier: Optional[float] = None):
         """
 
         Args:
-
-            team_color:
-            start_detect_tag:
-            single_tag_mode:if check only a single tag one time
+            cam_id:
+            resolution_multiplier:
         """
-
         self._camera: cv2.VideoCapture = cv2.VideoCapture(cam_id)
-        if minimal_resolution:
-            self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1)
-            self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1)
-        self._frame_center: Tuple[float, float] = (
-            self._camera.get(cv2.CAP_PROP_FRAME_WIDTH) / 2,
-            self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT) / 2,
-        )
-        self._tags_table: Dict[int, Tuple[Optional[Detection], int | float]] = {}
+        self.set_cam_resolution_mul(resolution_multiplier or self.Config.resolution_multiplier)
 
-        self._tag_id: int = DEFAULT_TAG_ID
-        self._tag_monitor_switch: bool = True
-        self._enemy_tag_id: int = NULL_TAG
-        self._ally_tag_id: int = NULL_TAG
-        self._neutral_tag_id: int = NULL_TAG
+        self._tag_id: int = TagDetector.Config.default_tag_id
 
-        self.team_color = team_color
-        self._init_tags_table()
-        self._single_tag_mode: bool = single_tag_mode
-        self._apriltag_detect: Optional[Thread] = None
-        self._detect_should_continue: bool = True
+        self._continue_detection: bool = False
+        self._halt_detection: bool = False
 
-        self.apriltag_detect_start() if start_detect_tag else None
-
-    def _init_tags_table(self):
+    def open_camera(self, device_id: int = 0) -> Self:
         """
-        the tag table stores the tag obj and the distance to the camera center
-        :return:
-        """
-        self._tags_table[self._enemy_tag_id] = TABLE_INIT_VALUE
-        self._tags_table[self._ally_tag_id] = TABLE_INIT_VALUE
-        self._tags_table[self._neutral_tag_id] = TABLE_INIT_VALUE
+        open the cam with self-check
+        Args:
+            device_id:
 
-    @property
-    def team_color(self) -> str:
-        """
-
-        Returns: team color
+        Returns:
 
         """
+        self._camera = cv2.VideoCapture(device_id)
+        read_status, _ = self._camera.read()
+        if read_status:
+            self._update_cam_center()
+            _logger.info(
+                f"CAMERA RESOLUTION：{self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)}x{self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT)}\n"
+                f"CAMERA FPS: [{self._camera.get(cv2.CAP_PROP_FPS)}]\n"
+                f"CAM CENTER: [{self._frame_center}]"
+            )
+        else:
+            _logger.error("Can't open camera!")
+        return self
 
-        return self._team_color
-
-    @team_color.setter
-    def team_color(self, team_color: Literal["blue", "yellow"] = BLUE_TEAM):
+    def release_camera(self) -> Self:
         """
-        set the ally/enemy tag according the team color
-        yellow: ally: 2 | enemy: 1|neutral: 0
-        blue: ally: 1 | enemy: 2 | neutral: 0
+        Releases the camera resource.
 
-        :param team_color: blue or yellow
-        :return:
+        This method releases the camera resource associated with the current object, ensuring that it is properly freed when no longer needed.
+
+        Returns:
+            Self: Returns the calling object itself, supporting chaining calls.
         """
-        self._team_color = team_color
-        self._neutral_tag_id = 0
-        if team_color == BLUE_TEAM:
-            self._enemy_tag_id = 2
-            self._ally_tag_id = 1
-        elif team_color == YELLOW_TEAM:
-            self._enemy_tag_id = 1
-            self._ally_tag_id = 2
-
-    @property
-    def detect_should_continue(self) -> bool:
-        """
-
-        Returns: the alive-status of the detection process
-
-        """
-        return self._detect_should_continue
-
-    @detect_should_continue.setter
-    def detect_should_continue(self, should: bool):
-
-        self._detect_should_continue = should
+        self._camera.release()  # Release the camera resource
+        return self  # Support chaining calls
 
     def apriltag_detect_start(self):
         """
-        start the tag-detection thread and set it to daemon
-        :return:
+        Initializes the apriltag detection process. This function runs in a separate thread,
+        continuously detecting apriltags from the camera feed and processes them according to the configured method.
+
+        The function starts a loop that fetches frames from the camera, performs apriltag detection on each frame.
+        Depending on the configuration, it handles detected tags either by "nearest" (closest tag) or "single" (first detected tag).
+        If tags are found, the function updates the internal tag ID based on the selected method.
         """
-        warnings.warn("AprilTag detect Activating")
-        self._detect_should_continue: bool = True
-        apriltag_detect = Thread(target=self._apriltag_detect_loop, name="apriltag_detect_Process")
+
+        # Set the tag detection function
+        detector_function = TagDetector.detector.detect
+
+        # Retrieve the camera instance and frame center
+        cam = self._camera
+        frame_center: ndarray = self._frame_center
+        check_interval = self.Config.halt_check_interval
+
+        # Choose the tag handling method based on the configuration
+        match self.Config.ordering_method:
+            case "nearest":
+                # Select the nearest tag handling method
+                used_method: Callable[[List[Detection]], int] = lambda tags: min(
+                    tags, key=lambda tag: linalg.norm(tag.center - frame_center)
+                ).tag_id
+            case "single":
+                # Select the method to handle the first detected tag
+                used_method: Callable[[List[Detection]], int] = lambda tags: tags[0].tag_id
+            case _:
+                # Raise an error if the configuration method is invalid
+                raise ValueError(f"Wrong ordering method! Got {self.Config.ordering_method}")
+
+        def __loop():
+            # Main detection loop
+            while self._continue_detection:
+                # Check if detection should be halted
+                if self._halt_detection:
+                    _logger.debug("Apriltag detect halted!")
+                    sleep(check_interval)
+                    continue
+                # Read a frame from the camera
+                success, frame = cam.read()
+                if success:
+                    # Convert the frame to grayscale and detect tags
+                    gray: Mat | ndarray[Any, dtype[generic]] | ndarray = cvtColor(frame, COLOR_RGB2GRAY)
+                    tags: list[Detection] = detector_function(gray, self.Config.single_tag_mode)
+                    if tags:
+                        # Update the tag ID using the selected method
+                        self._tag_id = used_method(tags)
+                else:
+                    # If the camera read fails, log a critical error and set the error tag ID
+                    self._tag_id = TagDetector.Config.error_tag_id
+                    _logger.critical("Camera not functional!")
+                    return
+            # Log when the detection loop stops
+            _logger.info("AprilTag detect stopped")
+
+        # Create and start the detection thread
+        apriltag_detect = Thread(target=__loop, name="apriltag_detect_Process")
         apriltag_detect.daemon = True
         apriltag_detect.start()
+        # Log when the detection is activated
+        _logger.info("AprilTag detect Activated")
 
-        self._apriltag_detect = apriltag_detect
-
-    def _apriltag_detect_loop(self):
+    def apriltag_detect_stop(self) -> Self:
         """
-        这是一个线程函数，它从摄像头捕获视频帧，处理帧以检测 AprilTags，
-        :return:
+        Stops the AprilTag detection process by setting `_continue_detection` to False and resetting `_tag_id` to the default value.
+
+        Returns:
+            Self: The current instance of the `TagDetector` class.
         """
-        frame_updater = self._camera.read
+        self._continue_detection = False
+        self._tag_id = TagDetector.Config.default_tag_id
+        return self
 
-        warnings.warn("Detection Activated")
-        while self._detect_should_continue:
-            if self._tag_monitor_switch:  # 台上开启 台下关闭 节约性能
-                success, frame = frame_updater()  # extract frame from the cam
-                if success:
-                    self._update_tags(frame)  # extract tags in the detection
-                    # extract the correct tag in the detection,
-                    # for example, the tag in the center of the frame
-                    self._update_tag_id()
-                else:
-                    break
-            else:
-                sleep(0.4)
-        warnings.warn("\n##########CAMERA CLOSED###########\n" "###ENTERING NO CAMERA MODE###")
-        self._tag_id = DEFAULT_TAG_ID
-
-    def _update_tags(self, frame: Mat):
+    def halt_detection(self) -> Self:
         """
-        update tags from the newly sampled frame
-        :return:
+        Halts the tag detection process by setting the `_halt_detection` flag to `True` and resetting the `_tag_id` to the default value specified in the `TagDetector.Config` class.
+
+        Returns:
+            Self: The current instance of the `TagDetector` class.
         """
-        # 将帧转换为灰度并存储在 gray 变量中。
-        # 使用 AprilTag 检测器对象（self.tag_detector）在灰度帧中检测 AprilTags。检测到的标记存储在 self._tags 变量中。
-        # override old tags
-        temp_dict = deepcopy(DEFAULT_TAG_TABLE)
-        for tag in self.__tag_detect(cvtColor(frame, COLOR_RGB2GRAY)):
-            # Convert tuples to NumPy arrays if necessary
-            start = array(tag.center)
-            target = array(self._frame_center)
-            # Calculate Manhattan distance using absolute differences and summing them up
-            temp_dict[tag.tag_id] = (tag, sum(abs(tag.center - self._frame_center)))
-        self._tags_table = temp_dict
+        self._halt_detection = True
+        self._tag_id = TagDetector.Config.default_tag_id
+        return self
 
-    def _update_tag_id(self):
+    def resume_detection(self) -> Self:
         """
-        update the tag id from the self._tags_table
-        :return:
+        Resumes the detection process.
+
+        Returns:
+            Self: The updated instance of the class.
         """
-
-        def _single_mode():
-
-            self._tag_id = DEFAULT_TAG_ID
-            for tag_data in self._tags_table.values():
-                if tag_data[0]:
-                    self._tag_id = tag_data[0].tag_id
-                    break
-
-        def _nearest_mode():
-            closest_dist = float("inf")
-            closest_tag = None
-            for tag_data in self._tags_table.values():
-                # check the tag obj is valid and compare with the closest tag
-                if tag_data[0] and tag_data[1] < closest_dist:
-                    closest_dist = tag_data[1]
-                    closest_tag = tag_data[0]
-            self._tag_id = closest_tag.tag_id if closest_tag else DEFAULT_TAG_ID
-
-        _single_mode() if self._single_tag_mode else _nearest_mode()
+        self._halt_detection = False
+        return self
 
     @property
-    def tag_table(self):
-        """
-
-        Returns: the tag table that contains all the results
-
-        """
-        return self._tags_table
-
-    @property
-    def tag_id(self):
+    def tag_id(self) -> int:
         """
         :return:  current tag id
         """
         return self._tag_id
 
+    def _update_cam_center(self) -> None:
+        self._frame_center = np.array(
+            [self._camera.get(cv2.CAP_PROP_FRAME_WIDTH) / 2, self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT) / 2]
+        )
+
+    def set_cam_resolution_mul(
+        self,
+        resolution_multiplier: float,
+    ) -> Self:
+        """
+        Set the camera resolution by multiplying the current resolution with the given resolution multiplier.
+
+        Args:
+            resolution_multiplier (float): The factor by which the camera resolution should be multiplied.
+
+        Returns:
+            Self: The updated instance of the class with the new camera resolution.
+        """
+        return self.set_cam_resolution(
+            self._camera.get(cv2.CAP_PROP_FRAME_WIDTH) * resolution_multiplier,
+            self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT) * resolution_multiplier,
+        )
+
+    def set_cam_resolution(self, new_width: int | float, new_height: int | float) -> Self:
+        """
+        Set the resolution of the camera.
+
+        Args:
+            new_width (int | float): The new width of the camera resolution.
+            new_height (int | float): The new height of the camera resolution.
+
+        Returns:
+            Self: The updated instance of the class.
+        """
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, new_width)
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, new_height)
+        self._update_cam_center()
+        return self
+
     @property
-    def tag_detection_switch(self):
+    def camera_device(self) -> cv2.VideoCapture:
         """
-
-        Returns: the detector status
-
-        """
-        return self._tag_monitor_switch
-
-    @tag_detection_switch.setter
-    def tag_detection_switch(self, switch: bool):
-        """
-        setter for the switch
-        :param switch:
-        :return:
-        """
-        if switch != self._tag_monitor_switch:
-            self._tag_monitor_switch = switch
-            self._tag_id = DEFAULT_TAG_ID
-
-    @property
-    def ally_tag_id(self) -> int:
-        """
-
-        Returns: the tag id of ally
+        the device instance
+        Returns:
 
         """
-        return self._ally_tag_id
+        return self._camera
 
-    @property
-    def enemy_tag_id(self) -> int:
-        """
 
-        Returns: the tag id of the enemy
+def test_frame_time(camera: cv2.VideoCapture, test_frames_count: int = 600) -> float:
+    """
+    test the frame time on the given count and return the average value of it
+    :param test_frames_count:
+    :return:
+    """
+    from timeit import repeat
+    from numpy import mean, std
 
-        """
-        return self._enemy_tag_id
-
-    @property
-    def neutral_tag_id(self) -> int:
-        """
-
-        Returns: the tag id of the neutral
-
-        """
-        return self._neutral_tag_id
+    durations: List[float] = repeat(stmt=camera.read, number=1, repeat=test_frames_count)
+    hall_duration: float = sum(durations)
+    average_duration: float = float(mean(hall_duration))
+    std_error = std(a=durations, ddof=1)
+    print(
+        "Frame Time Test Results: \n"
+        f"\tRunning on [{test_frames_count}] frame updates\n"
+        f"\tTotal Time Cost: [{hall_duration}]\n"
+        f"\tAverage Frame time: [{average_duration}]\n"
+        f"\tStd Error: [{std_error}]\n"
+    )
+    return average_duration
