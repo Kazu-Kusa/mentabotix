@@ -74,7 +74,7 @@ class Menta:
             sig = signature(sampler)  # 获取采样器的签名
             try:
                 match sig.return_annotation:  # 根据采样器的返回类型进行匹配
-                    case seq_sampler_ret if issubclass(seq_sampler_ret, Sequence) and len(sig.parameters) == 0:
+                    case seq_sampler_ret if hasattr(seq_sampler_ret, "__getitem__") and len(sig.parameters) == 0:
                         # 如果返回类型是序列且无参数，则认定为序列采样器
                         self.sampler_types.append(SamplerType.SEQ_SAMPLER)
                     case idx_sampler_ret if len(sig.parameters) == 1 and isinstance(
