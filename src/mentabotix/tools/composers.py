@@ -1,6 +1,7 @@
 from typing import List, Tuple, Callable, Optional, Self, Type, TypeVar, Dict
 
 from numpy import arange
+from numpy.random import random
 
 from ..modules.botix import MovingState, MovingTransition, __PLACE_HOLDER__
 
@@ -199,3 +200,48 @@ def snaking_chain():
 
     """
     raise NotImplementedError
+
+
+def random_lr_turn_branch(
+    start_state: MovingState,
+    end_state: MovingState,
+    start_state_duration: float,
+    turn_speed: int,
+    turn_duration: float,
+    turn_left_prob: 0.5,
+) -> Tuple[MovingTransition, MovingTransition]:
+    """
+    A function that generates random left and right turn states based on probabilities.
+    It creates two transition states, a start transition, and a turn transition.
+
+    Parameters:
+        start_state (MovingState): The initial state.
+        end_state (MovingState): The final state.
+        start_state_duration (float): The duration of the start state.
+        turn_speed (int): The speed of the turn.
+        turn_duration (float): The duration of the turn.
+        turn_left_prob (float): The probability of turning left.
+
+    Returns:
+        tuple: A tuple containing the start transition and the turn transition.
+    """
+    if not 0 < turn_left_prob < 1:
+        raise ValueError("turn_speed must be between 0 and 1")
+
+    def _die() -> bool:
+        return random() > turn_left_prob
+
+    left_turn_state = MovingState.turn("l", turn_speed)
+    right_turn_state = MovingState.turn("r", turn_speed)
+    start_transition = MovingTransition(
+        from_states=start_state,
+        to_states={False: right_turn_state, True: left_turn_state},
+        duration=start_state_duration,
+        breaker=_die,
+    )
+    turn_transition = MovingTransition(
+        from_states=[left_turn_state, right_turn_state],
+        to_states={__PLACE_HOLDER__: end_state},
+        duration=turn_duration,
+    )
+    return start_transition, turn_transition

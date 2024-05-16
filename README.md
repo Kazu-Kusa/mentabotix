@@ -598,7 +598,7 @@ botix = Botix(controller=CloseLoopController(motor_infos=[MotorInfo(i) for i in 
 botix.token_pool.extend([transition_a_bcd, transition_d_ef])
 
 # export the structure
-botix.export_structure("schema.puml")
+Botix.export_structure("schema.puml", botix.token_pool)
 ```
 
 The result will be written to `schema.puml` and below is the expected Puml source code.
@@ -666,7 +666,7 @@ con = CloseLoopController(motor_infos=[MotorInfo(i) for i in range(4)])
 botix = Botix(controller=con)
 
 # make the visualization
-botix.export_structure("composed.puml", transitions=transitions)
+Botix.export_structure("composed.puml", transitions=transitions)
 ```
 
 The exported structure will be written to `composed.puml`, and below is the expected Puml source code.

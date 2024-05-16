@@ -296,7 +296,7 @@ class TestBotix(unittest.TestCase):
 
         obj = self.botix_instance.compile()
         obj()
-        self.botix_instance.export_structure("test.puml")
+        self.botix_instance.export_structure("test.puml", self.botix_instance.token_pool)
 
     def test_export_structure(self):
         MovingState.__state_id_counter__ = 0
@@ -327,7 +327,7 @@ class TestBotix(unittest.TestCase):
             breaker=transition_breaker_fac([1, 2]),
         )
         self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
-        self.botix_instance.export_structure("test.puml")
+        self.botix_instance.export_structure("test.puml", self.botix_instance.token_pool)
 
     def test_compile_expressions(self):
         MovingState.__state_id_counter__ = 0

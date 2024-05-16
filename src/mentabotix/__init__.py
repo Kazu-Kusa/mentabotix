@@ -3,7 +3,7 @@ from .modules.exceptions import BadSignatureError, RequirementError, SamplerType
 from .modules.logger import set_log_level
 from .modules.menta import Menta, SequenceSampler, IndexedSampler, DirectSampler, SamplerUsage, SamplerType, Sampler
 
-from .tools.composers import MovingChainComposer, straight_chain, snaking_chain, scanning_chain
+from .tools.composers import MovingChainComposer, straight_chain, snaking_chain, scanning_chain, random_lr_turn_branch
 from .tools.generators import NameGenerator, Multipliers, make_multiplier_generator
 from .vision.tagdetector import TagDetector
 
@@ -34,6 +34,7 @@ __all__ = [
     "straight_chain",
     "snaking_chain",
     "scanning_chain",
+    "random_lr_turn_branch",
     # tools/generators
     "NameGenerator",
     "Multipliers",
