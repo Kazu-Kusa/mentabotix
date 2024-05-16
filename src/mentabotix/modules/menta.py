@@ -150,12 +150,13 @@ class Menta:
         eval_obj = eval(eval_string, eval_kwargs)
         return eval_obj
 
-    def construct_judge_function(
+    def construct_inlined_function(
         self,
         usages: List[SamplerUsage],
         judging_source: List[SourceCode] | SourceCode,
         extra_context: Dict[str, Any] = None,
-    ) -> Callable[[], bool]:
+        return_raw: bool = False,
+    ) -> Callable[[], Any] | Tuple[str, Dict[str, Any]]:
         """
         构造一个判断函数。该函数根据提供的采样器使用情况、判断源和额外的上下文信息，动态生成一个判断逻辑的函数。
 
@@ -165,7 +166,10 @@ class Menta:
         - extra_context: 可选的字典，提供了额外的上下文信息，这些信息在执行判断函数时会包含在执行环境中。
 
         返回值:
-        - 一个无参数的布尔型函数，执行时根据判断逻辑返回True或False。
+        - 一个无参数的布尔型函数，执行时根据判断逻辑返回Any类型的结果。
+
+        Args:
+            return_raw:
         """
 
         # 将judging_source统一处理为字符串格式
@@ -236,7 +240,10 @@ class Menta:
         _logger.debug("Compiling func_source")
 
         # 更新执行环境中的采样器和额外上下文信息
+
         used_samplers.update(extra_context) if extra_context else None
+        if return_raw:
+            return func_source, used_samplers
         exec(func_source, used_samplers)  # exec the source with the context
         func_obj: Callable[[], bool] = used_samplers.get("_func")
         _logger.debug(f"Succeed, compiled func_obj: {func_obj}")

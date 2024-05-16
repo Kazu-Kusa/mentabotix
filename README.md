@@ -172,8 +172,8 @@ extra_context = {"baseline": 47}
 from typing import Callable
 
 # Construct the judge function object
-updater_function: Callable[[], bool] = menta_instance.construct_judge_function(usages, judging_source=judging_source,
-                                                                               extra_context=extra_context)
+updater_function: Callable[[], bool] = menta_instance.construct_inlined_function(usages, judging_source=judging_source,
+                                                                                 extra_context=extra_context)
 
 # Use the judge function to update the system
 updater_function()

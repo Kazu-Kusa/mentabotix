@@ -119,15 +119,17 @@ class TestMenta(unittest.TestCase):
             SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
             SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
         ]
-        func = self.menta.construct_judge_function(usages=sages, judging_source="ret=s0 or s1 or s2 or s3 or s4 or s5")
+        func = self.menta.construct_inlined_function(
+            usages=sages, judging_source="ret=s0 or s1 or s2 or s3 or s4 or s5"
+        )
         self.assertIsInstance(func, Callable)
         self.assertEqual(func(), 1.2)
-        func = self.menta.construct_judge_function(usages=sages, judging_source="ret=s0+s1+s2+s3+s4+s5")
+        func = self.menta.construct_inlined_function(usages=sages, judging_source="ret=s0+s1+s2+s3+s4+s5")
         self.assertIsInstance(func, Callable)
         self.assertEqual(func(), 53.5)
 
         # Test with 1 usage
-        func = self.menta.construct_judge_function(
+        func = self.menta.construct_inlined_function(
             usages=[
                 SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
             ],
@@ -137,7 +139,7 @@ class TestMenta(unittest.TestCase):
         self.assertEqual(func(), 2.5)
 
         # Test with  multiline judging source
-        func = self.menta.construct_judge_function(
+        func = self.menta.construct_inlined_function(
             usages=sages,
             judging_source=["a=s0+s1", "print(f'this is {a}')", "b=s3+s4+s5", "print(f'this is {b}')", "ret=s2"],
         )
@@ -177,7 +179,7 @@ class TestMenta(unittest.TestCase):
             SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
             SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
         ]
-        func = self.menta.construct_judge_function(usages=sages, judging_source="ret=s0+s1+s2+s3+s4+s5")
+        func = self.menta.construct_inlined_function(usages=sages, judging_source="ret=s0+s1+s2+s3+s4+s5")
 
         def _manual_seq_func():
             seq_temp = mock_sequence_sampler()
@@ -196,6 +198,7 @@ class TestMenta(unittest.TestCase):
 
         self.assertEqual(func(), _manual_judge_func())
 
+        print(_manual_drc_func())
         import timeit
 
         # 假设这两个函数已经在你的代码中定义好了
@@ -214,6 +217,30 @@ class TestMenta(unittest.TestCase):
         print(f"_manual_judge_func() execution time for {number_of_runs} runs: {manual_judge_func_time:.6f} seconds")
 
         print(f"func() is {manual_judge_func_time / func_time:.2f} times faster than _manual_judge_func()")
+
+    def test_construct_ret_raw(self):
+        sages = [
+            SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+            SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
+            SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
+        ]
+        func, _ = self.menta.construct_inlined_function(
+            usages=sages, judging_source="ret=s0,s1,s2,s3,s4+s5", return_raw=True
+        )
+
+        self.assertEqual(
+            func,
+            """def _func():
+ func_0_temp,func_2_temp=func_0(),func_2()
+ ret=func_0_temp[0],func_0_temp[2],func_1(5),((func_2_temp>>0)&1),((func_2_temp>>1)&1)+((func_2_temp>>2)&1)
+ return ret""",
+        )
+
+        print(func)
+        func = self.menta.construct_inlined_function(
+            usages=sages, judging_source="ret=s0,s1,s2,s3,s4+s5", return_raw=False
+        )
+        print(func())
 
     def tearDown(self):
         # 清理可能的副作用
