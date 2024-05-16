@@ -658,8 +658,8 @@ class MovingTransition:
         Returns:
             None
         """
-        if duration <= 0:
-            raise ValueError(f"Duration must be positive, got {duration}")
+        if duration < 0:
+            raise ValueError(f"Duration can't be negative, got {duration}")
         if breaker is not None and signature(breaker).return_annotation == Signature.empty:
             raise ValueError(f"Breaker {breaker} must have annotated return type!")
 
@@ -787,7 +787,8 @@ class Botix:
         self.controller: CloseLoopController = controller
         self.token_pool: TokenPool = token_pool or []
 
-    def acquire_unique_start(self, token_pool: TokenPool, none_check: bool = True) -> MovingState | None:
+    @staticmethod
+    def acquire_unique_start(token_pool: TokenPool, none_check: bool = True) -> MovingState | None:
         """
         Retrieves a unique starting state from the given token pool.
 
@@ -799,7 +800,7 @@ class Botix:
         - Either a MovingState or None. Returns the starting state (with indegree 0) if uniquely identified; based on none_check's value, either returns None or raises an exception.
         """
         # Identifies states with an indegree of zero
-        zero_indegree_states = list(states_indegree := self.acquire_start_states(token_pool))
+        zero_indegree_states = list(states_indegree := Botix.acquire_start_states(token_pool))
 
         # Validates that there is exactly one state with an indegree of zero
         if len(zero_indegree_states) == 1:
@@ -1340,7 +1341,8 @@ class Botix:
                 # If no forward transition is present, return the compiled lines
                 return compiled_lines
 
-    def export_structure(self, save_path: str, transitions: Optional[List[MovingTransition]] = None) -> Self:
+    @classmethod
+    def export_structure(cls, save_path: str, transitions: TokenPool) -> Self:
         """
         Export the structure to a UML file based on the provided transitions.
 
@@ -1351,7 +1353,6 @@ class Botix:
         Returns:
             Self: The current instance.
         """
-        transitions: TokenPool = transitions or self.token_pool
         start_string = "@startuml\n"
         end_string = "@enduml\n"
 
@@ -1397,8 +1398,8 @@ class Botix:
 
                         lines.append(f"{break_node_name} --> {to_state_alias}: {case_name}\n")
 
-        start_states = self.acquire_start_states(token_pool=transitions)
-        end_states = self.acquire_end_states(token_pool=transitions)
+        start_states: Set[MovingState] = Botix.acquire_start_states(token_pool=transitions)
+        end_states: Set[MovingState] = Botix.acquire_end_states(token_pool=transitions)
 
         start_heads: List[str] = [f"[*] --> {used_state.get(sta)}\n" for sta in start_states]
         end_heads: List[str] = [f"{used_state.get(sta)} --> [*]\n" for sta in end_states]
@@ -1406,7 +1407,7 @@ class Botix:
         with open(save_path, "w") as f:
 
             f.writelines([start_string, *lines, "\n", *start_heads, "\n", *end_heads, "\n", end_string])
-        return self
+        return cls
 
     def compile(self, return_median: bool = False) -> Callable[[], None] | Tuple[List[str], Context]:
         """
