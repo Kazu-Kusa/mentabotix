@@ -2,7 +2,6 @@ import inspect
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
-from inspect import signature, Signature
 from itertools import zip_longest
 from queue import Queue
 from typing import (
@@ -13,7 +12,6 @@ from typing import (
     Literal,
     Any,
     Callable,
-    Iterable,
     Hashable,
     TypeVar,
     Dict,
@@ -635,37 +633,29 @@ class MovingTransition:
         to_states: Optional[Dict[KT, MovingState] | MovingState] = None,
     ):
         """
-        Initialize a new instance of the MovingTransition class.
+        Initialize a MovingTransition object.
 
         Args:
-            duration (float): The duration of the transition in seconds. Must be positive.
-            breaker (Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]]): A function that determines
-                whether the transition should be broken. If None, no breaker function is used. Must have an annotated
-                return type.
-            check_interval (Optional[float]): The interval in seconds at which the breaker function should be checked.
-                Defaults to 0.01 seconds.
-            from_states (Optional[Iterable[MovingState] | MovingState]): The states that the transition originates from.
-                Can be a single state or an iterable of states. Defaults to None.
-            to_states (Optional[Dict[KT, MovingState] | MovingState]): The states that the transition leads to. Can be a
-                single state or a dictionary mapping keys to states. Defaults to None.
+            duration: The transition duration, must be a non-negative float.
+            breaker: An optional callback function that can return a key (of type KT), a boolean, or any other value, used to interrupt the current state transition.
+            check_interval: The frequency at which to check for state transition, i.e., how often in seconds to check.
+            from_states: The starting states for the transition, can be a MovingState instance or a sequence of them.
+            to_states: The destination states mapped to corresponding MovingState instances, or directly a MovingState instance.
 
         Raises:
-            ValueError: If duration is not positive or if breaker has an empty return type annotation.
-            ValueError: If from_states is not None, a MovingState object, or an iterable of MovingState objects.
-            ValueError: If to_states is not None, a MovingState object, a dictionary mapping keys to MovingState objects,
-                or None.
-
-        Returns:
-            None
+            ValueError: If duration is negative, or from_states, to_states parameters are incorrectly formatted.
         """
+
+        # Validate the duration
         if duration < 0:
             raise ValueError(f"Duration can't be negative, got {duration}")
-        if breaker is not None and signature(breaker).return_annotation == Signature.empty:
-            raise ValueError(f"Breaker {breaker} must have annotated return type!")
 
+        # Initialize attributes
         self.duration: float = duration
         self.breaker: Optional[Callable[[], Any]] = breaker
         self.check_interval: float = check_interval
+
+        # Process the initial states parameter
         match from_states:
             case None:
                 self.from_states: List[MovingState] = []
@@ -676,6 +666,7 @@ class MovingTransition:
             case _:
                 raise ValueError(f"Invalid from_states, got {from_states}")
 
+        # Process the target states parameter
         match to_states:
             case None:
                 self.to_states: Dict[KT, MovingState] = {}
@@ -686,6 +677,7 @@ class MovingTransition:
             case _:
                 raise ValueError(f"Invalid to_states, got {to_states}")
 
+        # Assign a unique transition ID
         self._transition_id: int = MovingTransition.__state_id_counter__
         MovingTransition.__state_id_counter__ += 1
 

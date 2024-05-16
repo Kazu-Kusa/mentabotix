@@ -42,13 +42,6 @@ class TestMovingTransition(unittest.TestCase):
         with self.assertRaises(ValueError):
             MovingTransition(-1, None, None, None, None)
 
-    def test_init_breaker_no_return_type_annotation(self):
-        def invalid_breaker():
-            pass
-
-        with self.assertRaises(ValueError):
-            MovingTransition(self.default_duration, invalid_breaker, None, None, None)
-
     def test_init_from_states_valid_types(self):
         # Test valid from_states types
         transition = MovingTransition(self.default_duration, None, None, self.default_from_state, None)
