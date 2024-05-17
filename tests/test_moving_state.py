@@ -152,6 +152,23 @@ class TestMovingState(unittest.TestCase):
         state = MovingState(speed_expressions="var1", used_context_variables=["var1"])
         self.assertEqual(str(state), f"{state.state_id}-MovingState('var1', 'var1', 'var1', 'var1')")
 
+    def test_random_turn(self):
+        from mentabotix import MovingTransition, Botix
+
+        con = CloseLoopController(
+            [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
+        ).start_msg_sending()
+        state = MovingState.rand_turn(con, 500)
+        print(state)
+        end = MovingState(0)
+        trans = MovingTransition(1, from_states=[state], to_states={0: end})
+
+        b = Botix(controller=con, token_pool=[trans])
+
+        fun = b.compile()
+        fun()
+        con.stop_msg_sending()
+
 
 if __name__ == "__main__":
     unittest.main()

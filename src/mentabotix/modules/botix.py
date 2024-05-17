@@ -25,6 +25,7 @@ from typing import (
 
 import numpy as np
 from bdmc import CloseLoopController
+from numpy.random import random
 from terminaltables import SingleTable
 
 from .exceptions import StructuralError, TokenizeError
@@ -396,6 +397,43 @@ class MovingState:
                 return cls(speed, -speed)
             case _:
                 raise ValueError("Invalid Direction. Must be one of ['l','r']")
+
+    @classmethod
+    def rand_turn(
+        cls, con: CloseLoopController, turn_speed: int, used_ctx_varname: str = "direction", turn_left_prob: float = 0.5
+    ) -> Self:
+        """
+        Adds a method for random turning to the CloseLoopController class.
+
+        Parameters:
+            cls: Class method convention parameter, referring to the current class.
+            con: CloseLoopController object, representing the instance to which the random turning control is applied.
+            turn_speed: Turning speed, positive for turning right, negative for turning left.
+            used_ctx_varname: Context variable name used to represent the turn direction, defaults to "direction".
+            turn_left_prob: Probability of turning left, defaults to 0.5, meaning equal chance of turning left or right.
+
+        Returns:
+            None
+        """
+
+        def _dir() -> int:
+            """
+            Internal function to randomly decide the turn direction.
+
+            Returns:
+                int: 1 for turning left, -1 for turning right.
+            """
+            return 1 if random() < turn_left_prob else -1
+
+        # Register a context updater to update the turn direction before entering this behavior.
+        _updater = con.register_context_updater(_dir, output_keys=[used_ctx_varname], input_keys=[])
+
+        # Set speed expressions and actions before entering, implementing random turning.
+        return cls(
+            speed_expressions=(f"{-turn_speed}*{used_ctx_varname}", f"{turn_speed}*{used_ctx_varname}"),
+            used_context_variables=[used_ctx_varname],
+            before_entering=[_updater],
+        )
 
     @classmethod
     def drift(cls, fixed_axis: Literal["fl", "rl", "rr", "fr"], speed: int) -> Self:
@@ -1162,7 +1200,7 @@ class Botix:
         end_states = self.acquire_end_states(self.token_pool)
         self.ensure_accessibility(self.token_pool, start_state, end_states)
         if self.acquire_loops():
-            raise ValueError("Loops detected! All State-Transition should be implemented using breaker")
+            raise ValueError("Loops detected! All State-Transition should be implemented without loops.")
 
     def _assembly_match_cases(self, match_expression: str | List[str], cases: Dict[KT, str | List[str]]) -> List[str]:
         """
