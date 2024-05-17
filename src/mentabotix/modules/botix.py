@@ -602,7 +602,15 @@ class MovingState:
         return self._identifier
 
     def __eq__(self, other: Self) -> bool:
-        return tuple(self._speeds) == tuple(other._speeds) and self._speed_expressions == other._speed_expressions
+        if self._speeds is None or other._speeds is None:
+            return self._speed_expressions == other._speed_expressions
+        elif self._speeds is None:
+            return False
+        elif other._speeds is None:
+            return False
+        else:
+
+            return all(np.equal(self._speeds, other._speeds)) and self._speed_expressions == other._speed_expressions
 
     def __str__(self):
         return f"{self._identifier}-MovingState{self._speed_expressions or (tuple(self._speeds) if self._speeds is not None else None)}"
