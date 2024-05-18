@@ -495,14 +495,22 @@ class MovingState:
         Returns:
             Self: A new `MovingState` object with the same speeds as the current object.
         """
+        if self._speeds is not None:
 
-        return MovingState(
-            *tuple(self._speeds.tolist()),
-            speed_expressions=self._speed_expressions,
-            used_context_variables=self._used_context_variables,
-            before_entering=self._before_entering,
-            after_exiting=self._after_exiting,
-        )
+            return MovingState(
+                *tuple(self._speeds.tolist()),
+                speed_expressions=self._speed_expressions,
+                used_context_variables=self._used_context_variables,
+                before_entering=self._before_entering,
+                after_exiting=self._after_exiting,
+            )
+        else:
+            return MovingState(
+                speed_expressions=self._speed_expressions,
+                used_context_variables=self._used_context_variables,
+                before_entering=self._before_entering,
+                after_exiting=self._after_exiting,
+            )
 
     def tokenize(self, con: Optional[CloseLoopController]) -> Tuple[List[str], Context]:
         """

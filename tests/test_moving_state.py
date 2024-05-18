@@ -94,9 +94,23 @@ class TestMovingState(unittest.TestCase):
     def test_clone(self):
         original_state = MovingState(10, 20, 30, 40)
         cloned_state = original_state.clone()
+        print()
 
+        print(cloned_state)
+        print(original_state)
+        print()
         self.assertEqual(cloned_state.unwrap(), (10, 20, 30, 40))
         self.assertIsNot(cloned_state, original_state)  # Ensure a new instance is returned
+
+        original_state = MovingState(speed_expressions="var1", used_context_variables=["var1"])
+
+        cloned_state = original_state.clone()
+        print(cloned_state)
+        print(original_state)
+        print()
+
+        self.assertEqual(cloned_state.speed_expressions, ("var1", "var1", "var1", "var1"))
+        self.assertIsNot(cloned_state, original_state)  # Ensure a new instance is returned()
 
     def test_tokenize(self):
 
