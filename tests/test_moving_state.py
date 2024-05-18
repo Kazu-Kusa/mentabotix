@@ -111,6 +111,8 @@ class TestMovingState(unittest.TestCase):
 
         self.assertEqual(cloned_state.speed_expressions, ("var1", "var1", "var1", "var1"))
         self.assertIsNot(cloned_state, original_state)  # Ensure a new instance is returned()
+        self.assertNotEqual(id(original_state.after_exiting), id(cloned_state.after_exiting))
+        self.assertNotEqual(id(original_state.before_entering), id(cloned_state.before_entering))
 
     def test_tokenize(self):
 

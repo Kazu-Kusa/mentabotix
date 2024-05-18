@@ -301,7 +301,7 @@ class MovingState:
 
         if used_context_variables:
             self._validate_used_context_variables(used_context_variables, self._speed_expressions)
-        self._used_context_variables: List[str] = used_context_variables
+        self._used_context_variables: List[str] = used_context_variables or []
         self._before_entering: List[Callable[[], None]] = before_entering or []
         self._after_exiting: List[Callable[[], None]] = after_exiting or []
         self._identifier: int = MovingState.__state_id_counter__
@@ -500,16 +500,16 @@ class MovingState:
             return MovingState(
                 *tuple(self._speeds.tolist()),
                 speed_expressions=self._speed_expressions,
-                used_context_variables=self._used_context_variables,
-                before_entering=self._before_entering,
-                after_exiting=self._after_exiting,
+                used_context_variables=list(self._used_context_variables),
+                before_entering=list(self._before_entering),
+                after_exiting=list(self._after_exiting),
             )
         else:
             return MovingState(
                 speed_expressions=self._speed_expressions,
-                used_context_variables=self._used_context_variables,
-                before_entering=self._before_entering,
-                after_exiting=self._after_exiting,
+                used_context_variables=list(self._used_context_variables),
+                before_entering=list(self._before_entering),
+                after_exiting=list(self._after_exiting),
             )
 
     def tokenize(self, con: Optional[CloseLoopController]) -> Tuple[List[str], Context]:
@@ -802,8 +802,17 @@ class MovingTransition:
             self.duration,
             self.breaker,
             self.check_interval,
-            self.from_states,
-            self.to_states,
+            list(self.from_states),
+            dict(self.to_states),
+        )
+
+    def __eq__(self, other):
+        return (
+            self.duration == other.duration
+            and self.breaker == other.breaker
+            and self.check_interval == other.check_interval
+            and self.from_states == other.from_states
+            and self.to_states == other.to_states
         )
 
     def __str__(self):

@@ -97,6 +97,14 @@ class TestMovingTransition(unittest.TestCase):
         transition.clone()
         mock_clone.assert_called_once_with()
 
+    def test_clone_behavior(self):
+        transition1 = MovingTransition(self.default_duration)
+        transition2 = transition1.clone()
+        self.assertEqual(transition1, transition2)
+        self.assertNotEqual(id(transition1), id(transition2))
+        self.assertNotEqual(id(transition1.to_states), id(transition2.to_states))
+        self.assertNotEqual(id(transition1.from_states), id(transition2.from_states))
+
     def test_identifier(self):
         transition1 = MovingTransition(self.default_duration, None, None, None, None)
         transition2 = MovingTransition(self.default_duration, None, None, None, None)
