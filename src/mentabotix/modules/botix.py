@@ -301,9 +301,9 @@ class MovingState:
 
         if used_context_variables:
             self._validate_used_context_variables(used_context_variables, self._speed_expressions)
-        self._before_entering: List[Callable[[], None]] = before_entering
         self._used_context_variables: List[str] = used_context_variables
-        self._after_exiting: List[Callable[[], None]] = after_exiting
+        self._before_entering: List[Callable[[], None]] = before_entering or []
+        self._after_exiting: List[Callable[[], None]] = after_exiting or []
         self._identifier: int = MovingState.__state_id_counter__
         MovingState.__state_id_counter__ += 1
 
