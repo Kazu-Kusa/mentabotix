@@ -1237,6 +1237,12 @@ class Botix:
             case_expr: str = f"'{key}'" if isinstance(key, str) else f"{key}"
             lines.append(self._add_indent(f"case {case_expr}:", count=1))
             lines.extend(self._add_indent(value.split("\n") if isinstance(value, str) else value, count=2))
+        lines.append(self._add_indent(f"case undefined:", count=1))
+        lines.append(
+            self._add_indent(
+                f"raise ValueError(f'No matching case found, got {{undefined}}, not in {list(cases.keys())}')", count=2
+            )
+        )
         return lines
 
     @staticmethod

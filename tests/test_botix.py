@@ -1,7 +1,6 @@
 import random
 import unittest
 from typing import List
-from unittest.mock import Mock
 
 from bdmc.modules.controller import CloseLoopController
 
@@ -23,7 +22,7 @@ class TestBotix(unittest.TestCase):
         self.transition_bc = MovingTransition(duration=2, from_states=[self.state_b], to_states=self.state_c)
 
         # 初始化一个Botix实例用于测试
-        self.controller_mock = Mock(spec=CloseLoopController)
+        self.controller_mock = CloseLoopController()
         self.token_pool = [self.transition_start_a, self.transition_ab, self.transition_bc]
         self.botix_instance = Botix(controller=self.controller_mock, token_pool=self.token_pool)
 
@@ -226,6 +225,8 @@ class TestBotix(unittest.TestCase):
             "            more_result1",
             "    case 'case2':",
             "        result2",
+            "    case undefined:",
+            "        raise ValueError(f'No matching case found, got {undefined}, not in " "['case1', 'case2']')",
         ]
         self.assertEqual(test_instance._assembly_match_cases(match_expression, cases), expected_match_cases)
 
@@ -278,18 +279,21 @@ class TestBotix(unittest.TestCase):
         self.assertEqual(
             [
                 "def _func():",
-                "    match con.set_motors_speed((100, 100, 100, " "100)).delay_b_match(1,transition0_breaker_1,0.01):",
+                "    match con.set_motors_speed((100, 100, 100, 100)).delay_b_match(1,transition0_breaker_1,0.01):",
                 "        case 1:",
                 "            con.set_motors_speed((200, 200, 200, 200))",
                 "        case 2:",
                 "            con.set_motors_speed((300, 300, 300, 300))",
                 "        case 3:",
-                "            match con.set_motors_speed((400, 400, 400, "
-                "400)).delay_b_match(1,transition1_breaker_1,0.01):",
+                "            match con.set_motors_speed((400, 400, 400, 400)).delay_b_match(1,transition1_breaker_1,0.01):",
                 "                case 1:",
                 "                    con.set_motors_speed((500, 500, 500, 500))",
                 "                case 2:",
                 "                    con.set_motors_speed((600, 600, 600, 600))",
+                "                case undefined:",
+                "                    raise ValueError(f'No matching case found, got {undefined}, not in [1, 2]')",
+                "        case undefined:",
+                "            raise ValueError(f'No matching case found, got {undefined}, not in [1, 2, 3]')",
             ],
             compiled[0],
         )
