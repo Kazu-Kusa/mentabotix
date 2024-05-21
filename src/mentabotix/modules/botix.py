@@ -44,7 +44,6 @@ IndividualExpressionPattern: TypeAlias = Tuple[Expression, Expression, Expressio
 KT = TypeVar("KT", bound=Hashable)
 Context: TypeAlias = Dict[str, Any]
 
-
 __PLACE_HOLDER__ = 0
 __CONTROLLER_NAME__ = "con"
 __MAGIC_SPLIT_CHAR__ = "$$$"
@@ -399,8 +398,12 @@ class MovingState:
                 raise ValueError("Invalid Direction. Must be one of ['l','r']")
 
     @classmethod
-    def rand_turn(
-        cls, con: CloseLoopController, turn_speed: int, used_ctx_varname: str = "direction", turn_left_prob: float = 0.5
+    def rand_dir_turn(
+        cls,
+        con: CloseLoopController,
+        turn_speed: int,
+        turn_left_prob: float = 0.5,
+        used_ctx_varname: str = "rand_direction",
     ) -> Self:
         """
         Adds a method for random turning to the CloseLoopController class.
@@ -431,6 +434,56 @@ class MovingState:
         # Set speed expressions and actions before entering, implementing random turning.
         return cls(
             speed_expressions=(f"{-turn_speed}*{used_ctx_varname}", f"{turn_speed}*{used_ctx_varname}"),
+            used_context_variables=[used_ctx_varname],
+            before_entering=[_updater],
+        )
+
+    @classmethod
+    def rand_spd_turn(
+        cls,
+        con: CloseLoopController,
+        direction: Literal["l", "r"],
+        turn_speeds: Sequence[int],
+        weights: Optional[Sequence[float | int]] = None,
+        used_ctx_varname: str = "rand_speed",
+    ) -> Self:
+
+        from random import uniform, choice
+
+        match direction:
+            case "l":
+                direction = -1
+            case "r":
+                direction = 1
+            case _:
+                raise ValueError("Invalid Direction. Must be one of ['l','r']")
+        if weights:
+
+            def _spd() -> int:
+                # 计算权重总和并检查是否有负权重
+                total_weight = sum(weights)
+
+                # 生成一个随机数用于选择
+                rand_num = uniform(0, 1)
+                cum_weight = 0.0
+
+                # 遍历归一化后的权重，累加权重直到超过随机数，从而确定选择的索引
+                for i, weight in enumerate(weight / total_weight for weight in weights):
+                    cum_weight += weight
+                    if rand_num <= cum_weight:
+                        return turn_speeds[i]
+
+        else:
+            _spd = lambda: choice(turn_speeds)
+
+        # Register a context updater to update the turn direction before entering this behavior.
+
+        _updater = con.register_context_updater(_spd, output_keys=[used_ctx_varname], input_keys=[])
+
+        # Set speed expressions and actions before entering, implementing random turning.
+
+        return cls(
+            speed_expressions=(f"{direction}*{used_ctx_varname}", f"{direction*-1}*{used_ctx_varname}"),
             used_context_variables=[used_ctx_varname],
             before_entering=[_updater],
         )
@@ -573,7 +626,6 @@ class MovingState:
                         val_temp_name: str = expression_final_value_temp()
                         full_expression = expression[0]
                         for varname in self._used_context_variables:
-
                             # Create context retrieval functions using expressions
                             fn: Callable[[], Any] = con.register_context_getter(varname)
                             context[getter_func_var_name := getter_function_name_generator()] = fn
@@ -590,7 +642,6 @@ class MovingState:
                         r_val_temp_name: str = expression_final_value_temp()
                         lr_expression: str = f"{expression[0]}{__MAGIC_SPLIT_CHAR__}{expression[-1]}"
                         for varname in self._used_context_variables:
-
                             # Create context retrieval functions using expressions
                             fn: Callable[[], Any] = con.register_context_getter(varname)
                             context[getter_func_var_name := getter_function_name_generator()] = fn
