@@ -710,7 +710,12 @@ class MovingState:
             return all(np.equal(self._speeds, other._speeds)) and self._speed_expressions == other._speed_expressions
 
     def __str__(self):
-        return f"{self._identifier}-MovingState{self._speed_expressions or (tuple(self._speeds) if self._speeds is not None else None)}"
+        main_seq = self._speed_expressions if self._speeds is None else tuple(self._speeds)
+        if all(main_seq[0] == x for x in main_seq[1:]):
+            return f"{self._identifier}-MovingState({repr(main_seq[0])})"
+        if main_seq[0] == main_seq[1] != main_seq[-1] == main_seq[-2]:
+            return f"{self._identifier}-MovingState{main_seq[1:3]}"
+        return f"{self._identifier}-MovingState{main_seq}"
 
     def __repr__(self):
         return str(self)
@@ -723,7 +728,7 @@ class MovingTransition:
     Features multiple branches and a breaker function to determine if the transition should be broken.
     """
 
-    __state_id_counter__: ClassVar[int] = 0
+    __transition_id_counter__: ClassVar[int] = 0
 
     @property
     def identifier(self) -> int:
@@ -783,8 +788,8 @@ class MovingTransition:
                 raise ValueError(f"Invalid to_states, got {to_states}")
 
         # Assign a unique transition ID
-        self._transition_id: int = MovingTransition.__state_id_counter__
-        MovingTransition.__state_id_counter__ += 1
+        self._transition_id: int = MovingTransition.__transition_id_counter__
+        MovingTransition.__transition_id_counter__ += 1
 
     def add_from_state(self, state: MovingState) -> Self:
         """
@@ -870,10 +875,19 @@ class MovingTransition:
         temp = [["From", "To"]]
         for from_state, to_state in zip_longest(self.from_states, self.to_states.values()):
             temp.append([str(from_state) if from_state else "", str(to_state) if to_state else ""])
-        return SingleTable(temp).table
+
+        temp.append(
+            [
+                f"Duration: {self.duration:.3f}s",
+                f"Breaker: {get_function_annotations(self.breaker) if callable(self.breaker) else None}",
+            ]
+        )
+        s_table = SingleTable(temp, title=f"{self._transition_id}-MovingTransition")
+        s_table.inner_footing_row_border = True
+        return s_table.table
 
     def __repr__(self):
-        return f"{self.from_states} => {list(self.to_states.values())}"
+        return f"{self.from_states} => {list(self.to_states.values())}".replace("[", "<").replace("]", ">")
 
     def __hash__(self):
         return self._transition_id

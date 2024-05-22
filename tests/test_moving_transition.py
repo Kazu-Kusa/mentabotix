@@ -1,8 +1,5 @@
 import unittest
-from itertools import zip_longest
 from unittest.mock import patch
-
-from terminaltables import SingleTable
 
 from mentabotix.modules.botix import MovingTransition, MovingState
 
@@ -111,14 +108,26 @@ class TestMovingTransition(unittest.TestCase):
         self.assertNotEqual(transition1.identifier, transition2.identifier)
 
     def test_str(self):
+        MovingState.__state_id_counter__ = 0
+        MovingTransition.__transition_id_counter__ = 0
         from_states = [MovingState(100), MovingState(0)]
         to_states = {1: MovingState(4100), 2: MovingState(2000), 3: MovingState(0)}
         transition = MovingTransition(self.default_duration, None, None, from_states, to_states)
-        temp = [["From", "To"]]
-        for from_state, to_state in zip_longest(transition.from_states, transition.to_states.values()):
-            temp.append([str(from_state) if from_state else "", str(to_state) if to_state else ""])
 
-        self.assertEqual(str(transition), SingleTable(temp).table)
+        self.assertEqual(
+            str(transition),
+            (
+                "┌0-MovingTransition──┬─────────────────────┐\n"
+                "│ From               │ To                  │\n"
+                "├────────────────────┼─────────────────────┤\n"
+                "│ 0-MovingState(100) │ 2-MovingState(4100) │\n"
+                "│ 1-MovingState(0)   │ 3-MovingState(2000) │\n"
+                "│                    │ 4-MovingState(0)    │\n"
+                "├────────────────────┼─────────────────────┤\n"
+                "│ Duration: 1.500s   │ Breaker: None       │\n"
+                "└────────────────────┴─────────────────────┘"
+            ),
+        )
 
     def test_hash(self):
         transition1 = MovingTransition(self.default_duration, None, None, None, None)

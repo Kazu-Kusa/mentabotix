@@ -167,7 +167,7 @@ class TestMovingState(unittest.TestCase):
         state = MovingState(10, 20, 30, 40)
         self.assertEqual(str(state), f"{state.state_id}-MovingState(10, 20, 30, 40)")
         state = MovingState(speed_expressions="var1", used_context_variables=["var1"])
-        self.assertEqual(str(state), f"{state.state_id}-MovingState('var1', 'var1', 'var1', 'var1')")
+        self.assertEqual(str(state), f"{state.state_id}-MovingState('var1')")
 
     def test_random_turn(self):
         from mentabotix import MovingTransition, Botix
@@ -185,6 +185,7 @@ class TestMovingState(unittest.TestCase):
         fun = b.compile()
         fun()
         con.stop_msg_sending()
+        con.serial_client.close()
 
     def test_random_turn_spd_no_weights(self):
         from mentabotix import MovingTransition, Botix
@@ -208,6 +209,7 @@ class TestMovingState(unittest.TestCase):
             fun()
             sleep(0.2)
         con.stop_msg_sending()
+        con.serial_client.close()
 
     def test_random_turn_spd_with_weights(self):
         from mentabotix import MovingTransition, Botix
@@ -227,6 +229,7 @@ class TestMovingState(unittest.TestCase):
             fun()
             sleep(0.2)
         con.stop_msg_sending()
+        con.serial_client.close()
 
 
 if __name__ == "__main__":

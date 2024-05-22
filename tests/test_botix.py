@@ -112,9 +112,7 @@ class TestBotix(unittest.TestCase):
 
         self.assertEqual(
             str(self.botix_instance.acquire_loops()),
-            "[[4-MovingState(500, 500, 500, 500), "
-            "5-MovingState(600, 600, 600, 600), "
-            "3-MovingState(400, 400, 400, 400)]]",
+            "[[4-MovingState(500), 5-MovingState(600), 3-MovingState(400)]]",
         )
 
         # try to deal with the Diamond transition
@@ -124,12 +122,10 @@ class TestBotix(unittest.TestCase):
         self.botix_instance.token_pool.append(transition_f_cd)
 
         self.assertEqual(
-            "[[2-MovingState(300, 300, 300, 300), "
-            "4-MovingState(500, 500, 500, 500), "
-            "5-MovingState(600, 600, 600, 600)], "
-            "[4-MovingState(500, 500, 500, 500), "
-            "5-MovingState(600, 600, 600, 600), "
-            "3-MovingState(400, 400, 400, 400)]]",
+            (
+                "[[2-MovingState(300), 4-MovingState(500), 5-MovingState(600)], "
+                "[4-MovingState(500), 5-MovingState(600), 3-MovingState(400)]]"
+            ),
             str(self.botix_instance.acquire_loops()),
         )
 
@@ -173,13 +169,10 @@ class TestBotix(unittest.TestCase):
             transition_k_lz,
         ]
 
-        self.assertEqual(
-            str(self.botix_instance.acquire_max_branchless_chain(state_a)), "([0-MovingState(100, 100, 100, 100)], [])"
-        )
+        self.assertEqual("([0-MovingState(100)], [])", str(self.botix_instance.acquire_max_branchless_chain(state_a)))
         self.assertEqual(
             str(self.botix_instance.acquire_max_branchless_chain(state_b)),
-            "([1-MovingState(200, 200, 200, 200), 6-MovingState(700, 700, 700, 700)],"
-            " [[1-MovingState(200, 200, 200, 200)] => [6-MovingState(700, 700, 700, 700)]])",
+            ("([1-MovingState(200), 6-MovingState(700)], [<1-MovingState(200)> => " "<6-MovingState(700)>])"),
         )
 
     def test_ident(self):
@@ -246,7 +239,7 @@ class TestBotix(unittest.TestCase):
 
     def test_compile_with_branches(self):
         MovingState.__state_id_counter__ = 0
-        MovingTransition.__state_id_counter__ = 0
+        MovingTransition.__transition_id_counter__ = 0
         state_a = MovingState(100)
         state_b = MovingState(200)
         state_c = MovingState(300)
@@ -304,7 +297,7 @@ class TestBotix(unittest.TestCase):
 
     def test_export_structure(self):
         MovingState.__state_id_counter__ = 0
-        MovingTransition.__state_id_counter__ = 0
+        MovingTransition.__transition_id_counter__ = 0
         state_a = MovingState(100)
         state_b = MovingState(200)
         state_c = MovingState(300)
@@ -335,7 +328,7 @@ class TestBotix(unittest.TestCase):
 
     def test_compile_expressions(self):
         MovingState.__state_id_counter__ = 0
-        MovingTransition.__state_id_counter__ = 0
+        MovingTransition.__transition_id_counter__ = 0
 
         state_a = MovingState(speed_expressions="var1", used_context_variables=["var1"])
         state_b = MovingState(speed_expressions=("var1", "var2"), used_context_variables=["var1", "var2"])
