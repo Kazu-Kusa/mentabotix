@@ -114,6 +114,111 @@ class MovingChainComposer:
         self._flip()
         return self
 
+    def concat(self, states: List[MovingState], transitions: List[MovingTransition]) -> Self:
+        """
+        Concatenates the given list of states and transitions into the current data structure.
+
+        Args:
+            states: A list of MovingState objects representing the states to concatenate.
+            transitions: A list of MovingTransition objects representing the transitions to concatenate.
+
+        Returns:
+            Returns the concatenated data structure itself.
+
+        Raises:
+            ValueError if no states or transitions are provided.
+            ValueError if the initial condition of the transition's starting state doesn't match the expectation.
+            ValueError if the number of states and transitions don't match by no more than 1.
+
+        This function checks the validity of the input and connects the states and transitions accordingly.
+        It handles different scenarios based on whether there's an initial state and the difference between the lengths of states and transitions.
+        """
+
+        # Check if at least one state and one transition are provided
+        if not (states or transitions):
+            raise ValueError("Need at least one state and one transition!")
+
+        # Initialize the head transition and check if it has a starting state
+        head_transition = transitions[0]
+        has_start_state = len(head_transition.from_states) == 1
+        head_state = states[0]
+
+        # Validate the expected next element type (state or transition) based on the initial condition
+        if self.next_need == MovingTransition and has_start_state:
+            raise ValueError(f"Need {self.next_need}, got {head_transition.from_states[0]}!")
+        elif self.next_need == MovingState and not has_start_state:
+            raise ValueError(f"Need {self.next_need}, got {head_transition.to_states}!")
+        elif self.next_need == MovingState and head_transition.from_states[0] != head_state:
+            raise ValueError(f"The transition {head_transition} should only start from {head_state}!")
+
+        # Reset the states and transitions lists for concatenation
+        states: List[MovingState]
+        transitions: List[MovingTransition]
+
+        # Connect the states and transitions based on the presence of an initial state and their lengths
+        match has_start_state, len(states), len(transitions):
+            case True, sta_len, tran_len if sta_len == tran_len:
+                # If there's an initial state and the lengths match, connect them normally
+                if self.last_transition:
+                    self.last_transition.to_states[__PLACE_HOLDER__] = head_state
+
+                for sta, tran in zip(states, transitions):
+                    # Ensure each state is in the corresponding transition's from_states
+                    if sta not in tran.from_states:
+                        raise ValueError(f"The state {sta} should be in the from_states of the transition {tran}!")
+                    self._chain_container[MovingState].append(sta)
+                    self._chain_container[MovingTransition].append(tran)
+
+            case False, sta_len, tran_len if sta_len == tran_len:
+                # If there's no initial state and the lengths match, connect them differently
+                if self.last_state:
+                    head_transition.from_states.append(self.last_state)
+
+                for sta, tran in zip(states, transitions):
+                    # Ensure each state is in the corresponding transition's to_states
+                    if sta not in tran.to_states.values():
+                        raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
+                    self._chain_container[MovingState].append(sta)
+                    self._chain_container[MovingTransition].append(tran)
+
+            case True, sta_len, tran_len if sta_len - tran_len == 1:
+                # If there's an extra state
+                excessive_state = states.pop(0)
+                if self.last_transition:
+                    self.last_transition.to_states[__PLACE_HOLDER__] = excessive_state
+
+                self._chain_container[MovingState].append(excessive_state)
+                for sta, tran in zip(states, transitions):
+                    # Ensure each state is in the corresponding transition's to_states
+                    if sta not in tran.to_states.values():
+                        raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
+
+                    self._chain_container[MovingState].append(sta)
+                    self._chain_container[MovingTransition].append(tran)
+                self._flip()  # Flip the internal representation to accommodate the new connection
+
+            case False, sta_len, tran_len if sta_len - tran_len == -1:
+                # If there's an extra transition
+                excessive_transition = transitions.pop(0)
+                excessive_transition.from_states.append(self.last_state)
+                self._chain_container[MovingTransition].append(excessive_transition)
+                for sta, tran in zip(states, transitions):
+                    # Ensure each state is in the corresponding transition's from_states
+                    if sta not in tran.from_states:
+                        raise ValueError(f"The state {sta} should be in the from_states of the transition {tran}!")
+                    self._chain_container[MovingState].append(sta)
+                    self._chain_container[MovingTransition].append(tran)
+                self._flip()  # Flip the internal representation to accommodate the new connection
+
+            case _, _, _:
+                # If the lengths differ by more than 1, the data pack is invalid
+                raise ValueError(
+                    f"The data pack {states} {transitions} is not valid! "
+                    f"A DataPack should have a length difference no more than 1!"
+                )
+
+        return self
+
 
 def straight_chain(
     start_speed: int,
