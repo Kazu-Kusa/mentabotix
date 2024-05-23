@@ -1,6 +1,5 @@
-from typing import List, Tuple, Callable, Optional, Self, Type, TypeVar, Dict
+from typing import List, Tuple, Callable, Optional, Self, Type, TypeVar, Dict, Hashable
 
-from numpy import arange
 from numpy.random import random
 
 from ..modules.botix import MovingState, MovingTransition, __PLACE_HOLDER__
@@ -85,11 +84,12 @@ class MovingChainComposer:
         self.init_container()
         return ret_pack
 
-    def add(self, unit: MovingState | MovingTransition) -> Self:
+    def add(self, unit: MovingState | MovingTransition, register_case: Optional[Hashable] = __PLACE_HOLDER__) -> Self:
         """
         Adds a `MovingState` or `MovingTransition` object to the chain container.
 
         Args:
+            register_case (Optional[Hashable]): The case to register the state or transition with.
             unit (MovingState | MovingTransition): The unit to be added to the chain container.
 
         Returns:
@@ -105,9 +105,9 @@ class MovingChainComposer:
         elif unit_type == MovingState:
             self._chain_container[MovingState].append(unit)
             if self.last_transition:
-                self.last_transition.to_states[__PLACE_HOLDER__] = unit
+                self.last_transition.to_states[register_case] = unit
         elif unit_type == MovingTransition:
-            unit.from_states.append(self.last_state)
+            unit.from_states.append(self.last_state) if self.last_state not in unit.from_states else None
             self._chain_container[MovingTransition].append(unit)
         else:
             raise RuntimeError("Should never reach here!")
@@ -227,63 +227,66 @@ def straight_chain(
     power_exponent: float = 1.0,
     interval: float = 0.07,
     breaker: Optional[Callable[[], bool]] = None,
+    lead_time: float = 0.05,
     state_on_break: Optional[MovingState] = MovingState(0),
 ) -> StateTransitionPack:
     """
     A function that calculates the states and transitions for a straight chain based on the input parameters.
 
     Args:
+        lead_time (float): The lead time of the chain.
         start_speed (int): The initial speed of the chain.
         end_speed (int): The final speed of the chain.
         duration (float): The total duration of the chain movement.
         power_exponent (float, optional): The power exponent used in the calculation. Defaults to 1.0.
         interval (float, optional): The interval used in the calculation. Defaults to 0.07.
-        breaker (Optional[Callable[[], bool]], optional): A function to determine if the transition should be broken. Defaults to None.
-        state_on_break (Optional[MovingState], optional): The state to transition to if the chain is broken. Defaults to MovingState(0).
+        breaker (Optional[Callable[[], bool]], optional): A function to determine if the transition should be broken.
+        Defaults to None.
+        state_on_break (Optional[MovingState], optional): The state to transition to if the chain is broken.
+        Defaults to MovingState(0).
 
     Returns:
         StateTransitionPack: A tuple containing the list of states and transitions for the straight chain.
     """
-    # Initialize the list of states with the starting state
-    states: List[MovingState] = [MovingState(start_speed)]
-    # Initialize an empty list for transitions
-    transitions: List[MovingTransition] = []
+    duration -= lead_time
+    comp = MovingChainComposer().init_container().add(MovingState(start_speed))
 
     # Calculate the deviation in speed for uniform distribution across the duration
     deviation = end_speed - start_speed
     # Generate a sequence of speeds based on the given parameters
-    speed_seq = [
-        start_speed + round(deviation * x**power_exponent) for x in arange(0, 1.0, interval / (duration - interval))
-    ]
+    step_len = interval / (duration - lead_time)
+
+    percentages = [step_len] * int(duration // interval) + [1 % step_len]
+    progress = 0
 
     # Handle different scenarios based on whether a breaker function is provided
     match breaker:
         case None:
             # If no breaker function, create transitions without breaking condition
-            for cur_speed in speed_seq:
-                last_state = states[-1]
-                cur_state = MovingState(cur_speed)
-                cur_transition = MovingTransition(from_states=last_state, to_states=cur_state, duration=interval)
-                states.append(cur_state)
-                transitions.append(cur_transition)
-            return states, transitions
+            for percentage in percentages:
+                progress += percentage
+
+                (
+                    comp.add(MovingTransition(duration=duration * percentage)).add(
+                        MovingState(start_speed + round(deviation * progress**power_exponent))
+                    )
+                )
+
+            return comp.export_structure()
 
         case break_function if callable(break_function):
             # If a breaker function is provided, create transitions that can be broken
-            for cur_speed in speed_seq:
-                last_state = states[-1]
-                cur_state = MovingState(cur_speed)
-                cur_transition = MovingTransition(
-                    from_states=last_state,
-                    to_states={False: cur_state, True: state_on_break},
-                    duration=interval,
-                    breaker=break_function,
+            for percentage in percentages:
+                progress += percentage
+                (
+                    comp.add(
+                        MovingTransition(
+                            duration=duration * percentage, breaker=break_function, to_states={True: state_on_break}
+                        )
+                    ).add(MovingState(start_speed + round(deviation * progress**power_exponent)), False)
                 )
-                states.append(cur_state)
-                transitions.append(cur_transition)
-            # Append the break state to the states list
-            states.append(state_on_break)
-            return states, transitions
+
+            return comp.export_structure()
         case _:
             # If breaker is neither None nor callable, raise an error
             raise ValueError("breaker must be callable or None")

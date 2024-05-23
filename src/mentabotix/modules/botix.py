@@ -1507,6 +1507,8 @@ class Botix:
                         to_state_alias = used_state.get(to_state)
                     lines.append(f"{from_state_alias} --> {to_state_alias}\n")
                 else:
+                    if not callable(transition.breaker):
+                        raise ValueError("The break function must be callable. Since branch must need a valid breaker.")
                     break_node_name: str = break_gen()
                     lines.insert(0, f"state {break_node_name} <<choice>>\n")
                     lines.insert(

@@ -275,6 +275,38 @@ class TestComposer(unittest.TestCase):
         with self.assertRaises(ValueError):
             random_lr_turn_branch(MovingState(0), MovingState(20), 2.0, -1, 1.5, 1.5)  # Invalid turn_speed
 
+    def test_seq_add(self):
+        # Test adding correct unit types
+        state = MovingState(1)
+        pre_val = 1
+        transition = MovingTransition(pre_val)
+        # Test adding incorrect unit type
+        dur = 5
+        lead_time = 0.05
+        chain_pack = straight_chain(1000, 5000, dur, interval=1.25, lead_time=lead_time)
+
+        print(chain_pack)
+        self.moving_chain_composer.init_container().add(state).add(transition).concat(*chain_pack)
+        pack = self.moving_chain_composer.export_structure()[1]
+        self.assertAlmostEqual(pre_val + dur - lead_time, sum(t.duration for t in pack))
+        Botix.export_structure("seq_add.puml", pack)
+
+        def _a() -> bool:
+            return True
+
+        chain_pack = straight_chain(
+            1000,
+            5000,
+            dur,
+            interval=1.25,
+            lead_time=lead_time,
+            breaker=_a,
+        )
+        self.moving_chain_composer.init_container().add(state).add(transition).concat(*chain_pack)
+        pack = self.moving_chain_composer.export_structure()[1]
+        self.assertAlmostEqual(pre_val + dur - lead_time, sum(t.duration for t in pack))
+        Botix.export_structure("seq_add_breaker.puml", pack)
+
 
 if __name__ == "__main__":
     unittest.main()
