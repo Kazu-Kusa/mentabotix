@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import List, Tuple, Callable, Optional, Self, Type, TypeVar, Dict, Hashable
 
 from numpy.random import random
@@ -7,6 +8,7 @@ from ..modules.botix import MovingState, MovingTransition, __PLACE_HOLDER__
 StateTransitionPack = Tuple[List[MovingState], List[MovingTransition]]
 
 UnitType = TypeVar("UnitType", Type[MovingState], Type[MovingTransition])
+from terminaltables import SingleTable
 
 
 class MovingChainComposer:
@@ -217,6 +219,170 @@ class MovingChainComposer:
                     f"A DataPack should have a length difference no more than 1!"
                 )
 
+        return self
+
+
+KT = TypeVar("KT", bound=Hashable)
+
+
+class CaseRegistry:
+    """
+    Initializes a new instance of the CaseRegistry class.
+
+    Args:
+        case_dict (Dict[KT, MovingState]): A dictionary mapping keys of type KT to MovingState objects. Defaults to an empty dictionary if not provided.
+        to_cover (Type[Enum]): The enumeration type to cover.
+
+
+    """
+
+    def __init__(self, case_dict: Dict[KT, MovingState], to_cover: Type[Enum]):
+        self._case_dict: Dict[KT, MovingState] = case_dict or {}
+        self._to_cover: Type[Enum] = to_cover
+
+    @property
+    def case_dict(self) -> Dict[KT, MovingState]:
+        """
+
+        Returns:
+            Dict[KT, MovingState]: A dictionary mapping keys of type KT to MovingState objects.
+
+        """
+        return self._case_dict
+
+    @property
+    def table(self) -> str:
+        """
+        Returns a string representation of the case registry table.
+
+        This property retrieves the case registry dictionary and converts it into a list of lists, where each inner list
+        contains the case name and its corresponding target state. The case registry title is then used to generate
+        the table title.
+
+        Returns:
+            str: A string representation of the case registry table.
+        """
+        data = [["Case", "Target State"]] + list(self._case_dict.items())
+        return SingleTable(data, title=f"CaseReg-of-{self._to_cover}").table
+
+    def reassign(self, to_cover: Type[Enum]):
+        """
+        Reassigns the `_to_cover` attribute of the `CaseRegistry` instance to the specified `to_cover` value.
+
+        Parameters:
+            to_cover (Type[Enum]): The new value for the `_to_cover` attribute.
+
+        Returns:
+            None
+        """
+        self._to_cover = to_cover
+
+    def init_container(self) -> Self:
+        """
+        Initializes the `_case_dict` attribute by clearing all its elements.
+
+        Returns:
+            Self: The current instance of the class.
+        """
+        self._case_dict.clear()
+        return self
+
+    def export(self, force: bool = False) -> Dict[KT, MovingState]:
+        """
+        Export the registered cases and their corresponding target states as a dictionary.
+
+        Returns:
+            Dict[KT, MovingState]: A dictionary where the keys are the registered cases and the values are the corresponding target states.
+
+        Raises:
+            ValueError: If any of the cases are not registered or if any of the cases are not allowed.
+        """
+        if not force:
+            not_registered = list(filter(lambda x: x.value not in self._case_dict, self._to_cover))
+
+            if not_registered:
+                raise ValueError(f"Case not registered: {not_registered}")
+        temp = dict(self._case_dict)
+        self.init_container()
+        return temp
+
+    def register(self, case: Enum, target_state: MovingState) -> Self:
+        """
+        Register a case with its corresponding target state.
+
+        Args:
+            case (KT): The case to be registered.
+            target_state (MovingState): The target state associated with the case.
+
+        Raises:
+            ValueError: If the case is already registered or if the case is not allowed.
+
+        Returns:
+            None
+        """
+        case_value = case.value
+        if case_value in self._case_dict:
+            raise ValueError(f"Case already registered: {case}")
+        elif not isinstance(case, self._to_cover):
+            raise ValueError(f"Case not in {list(self._to_cover)}, got {case_value}.")
+        self._case_dict[case_value] = target_state
+        return self
+
+    def batch_register(self, cases: List[Enum], target_state: MovingState) -> Self:
+        """
+        Register multiple cases with the same target state.
+
+        Args:
+            cases (List[Enum]): A list of enum types representing the cases to be registered.
+            target_state (MovingState): The target state to be associated with the cases.
+
+        Raises:
+            ValueError: If any of the cases are already registered.
+
+        Returns:
+            None
+        """
+        already_registered = list(filter(lambda x: x.value in self._case_dict, cases))
+        if already_registered:
+            raise ValueError(f"Case already registered: {already_registered}")
+
+        for case in cases:
+            self._case_dict[case.value] = target_state
+        return self
+
+    def unregister(self, case: KT) -> Self:
+        """
+        Unregister a case.
+
+        Args:
+            case (KT): The case to be unregistered.
+
+        Raises:
+            ValueError: If the case is not registered.
+
+        Returns:
+            None
+        """
+        if case not in self._case_dict:
+            raise ValueError(f"Case not registered: {case}")
+        del self._case_dict[case]
+        return self
+
+    def unregister_batch(self, cases: List[Enum]) -> Self:
+        """
+        Unregister multiple cases.
+
+        Args:
+            cases (List[Enum]): A list of enum types representing the cases to be unregistered.
+
+        Raises:
+            ValueError: If any of the cases are not registered.
+
+        Returns:
+            None
+        """
+        for case in cases:
+            self.unregister(case)
         return self
 
 
