@@ -447,7 +447,20 @@ class MovingState:
         weights: Optional[Sequence[float | int]] = None,
         used_ctx_varname: str = "rand_speed",
     ) -> Self:
+        """
+        Generates a random turning behavior for a CloseLoopController.
 
+        Parameters:
+            cls: Class method convention parameter, referring to the current class.
+            con: The CloseLoopController object to apply the random turning behavior to.
+            direction: Turning direction, either "l" (left) or "r" (right).
+            turn_speeds: A sequence of turning speeds to randomly select from.
+            weights: An optional sequence of weights corresponding to turn_speeds for weighted selection.
+            used_ctx_varname: The variable name to use in the context to store the selected turning speed. Default is "rand_speed".
+
+        Returns:
+            An instance of the class configured with the random turning behavior.
+        """
         from random import uniform, choice
 
         match direction:
@@ -477,7 +490,9 @@ class MovingState:
                         return index
 
         else:
-            _spd = lambda: choice(turn_speeds)
+
+            def _spd() -> int:
+                return choice(turn_speeds)
 
         # Register a context updater to update the turn direction before entering this behavior.
 
