@@ -236,7 +236,11 @@ class CaseRegistry:
 
     """
 
-    def __init__(self, case_dict: Dict[KT, MovingState], to_cover: Type[Enum]):
+    def __init__(
+        self,
+        to_cover: Type[Enum],
+        case_dict: Optional[Dict[KT, MovingState]] = None,
+    ):
         self._case_dict: Dict[KT, MovingState] = case_dict or {}
         self._to_cover: Type[Enum] = to_cover
 
