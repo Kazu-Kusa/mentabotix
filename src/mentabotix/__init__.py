@@ -12,7 +12,7 @@ from .tools.composers import (
     random_lr_turn_branch,
 )
 from .tools.generators import NameGenerator, Multipliers, make_multiplier_generator
-
+from .tools.selectors import make_weighted_selector
 
 __all__ = [
     "set_log_level",
@@ -44,4 +44,6 @@ __all__ = [
     # tools/generators
     "NameGenerator",
     "Multipliers",
+    # tools/selectors
+    "make_weighted_selector",
 ]
