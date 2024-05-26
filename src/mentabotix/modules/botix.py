@@ -28,11 +28,12 @@ from bdmc import CloseLoopController
 from numpy.random import random
 from terminaltables import SingleTable
 
+from mentabotix.tools.selectors import make_weighted_selector
 from .exceptions import StructuralError, TokenizeError
+from .logger import _logger
 from ..tools.generators import NameGenerator
 
 T_EXPR = TypeVar("T_EXPR", str, list)
-
 Expression: TypeAlias = str | int
 
 FullPattern: TypeAlias = Tuple[int]
@@ -416,8 +417,13 @@ class MovingState:
             turn_left_prob: Probability of turning left, defaults to 0.5, meaning equal chance of turning left or right.
 
         Returns:
-            None
+            Self: A new instance of the class with a random turn direction and speed.
         """
+        if turn_speed < 0:
+            _logger.warn(
+                f"Turn speed must be positive, got {turn_speed}, "
+                f"if you 'd like to turn right, lower the value of turn_left_prob instead."
+            )
 
         def _dir() -> int:
             """
@@ -459,40 +465,23 @@ class MovingState:
             used_ctx_varname: The variable name to use in the context to store the selected turning speed. Default is "rand_speed".
 
         Returns:
-            An instance of the class configured with the random turning behavior.
+            Self: An instance of the class configured with the random turning behavior.
         """
-        from random import uniform, choice
+        if any(num < 0 for num in turn_speeds):
+            _logger.warn(
+                f"All turn speeds should be positive, got {turn_speeds}. "
+                f"Since you should not using the turn left with negative speed to represent turn right."
+            )
+        from random import choice
 
         match direction:
             case "l":
-                direction = -1
-            case "r":
                 direction = 1
+            case "r":
+                direction = -1
             case _:
                 raise ValueError("Invalid Direction. Must be one of ['l','r']")
-        if weights:
-
-            total_weight = sum(weights)
-            norm_weights = tuple(weight / total_weight for weight in weights)
-            pack = list(zip(turn_speeds, norm_weights))
-
-            def _spd() -> int:
-                # 计算权重总和并检查是否有负权重
-
-                # 生成一个随机数用于选择
-                rand_num = uniform(0, 1)
-                cum_weight = 0.0
-
-                # 遍历归一化后的权重，累加权重直到超过随机数，从而确定选择的索引
-                for index, weight in pack:
-                    cum_weight += weight
-                    if rand_num < cum_weight:
-                        return index
-
-        else:
-
-            def _spd() -> int:
-                return choice(turn_speeds)
+        _spd = make_weighted_selector(turn_speeds, weights) if weights else lambda: choice(turn_speeds)
 
         # Register a context updater to update the turn direction before entering this behavior.
 
@@ -501,7 +490,45 @@ class MovingState:
         # Set speed expressions and actions before entering, implementing random turning.
 
         return cls(
-            speed_expressions=(f"{direction}*{used_ctx_varname}", f"{direction * -1}*{used_ctx_varname}"),
+            speed_expressions=(f"{-direction}*{used_ctx_varname}", f"{direction}*{used_ctx_varname}"),
+            used_context_variables=[used_ctx_varname],
+            before_entering=[_updater],
+        )
+
+    @classmethod
+    def rand_dir_spd_turn(
+        cls,
+        con: CloseLoopController,
+        turn_speeds: Sequence[int],
+        weights: Optional[Sequence[float | int]] = None,
+        used_ctx_varname: str = "rand_dir_speed",
+    ) -> Self:
+        """
+        Generates an instance of CloseLoopController that randomly selects a turning speed before entering the behavior.
+        It updates the context variable with the chosen speed.
+
+        Args:
+            con (CloseLoopController): The controller instance to modify.
+            turn_speeds (Sequence[int]): A sequence of turning speeds. positive means turn left, negative means turn right
+            weights (Optional[Sequence[float | int]], optional): Weights for each turning speed. If provided, speeds will be selected probabilistically. Defaults to None.
+            used_ctx_varname (str, optional): The name of the context variable to store the selected speed. Defaults to "rand_dir_speed".
+
+        Returns:
+            Self: An instance of the CloseLoopController class with the configured random turning behavior.
+        """
+        # Warn if all turn speeds have the same sign, suggesting the use of rand_spd_turn instead.
+        if all(num > 0 for num in turn_speeds) or all(num < 0 for num in turn_speeds):
+            _logger.warn("All speeds have the same sign, consider using rand_spd_turn")
+
+        # Select a turning speed based on given weights or randomly.
+        _spd = make_weighted_selector(turn_speeds, weights) if weights else lambda: choice(turn_speeds)
+
+        # Register a context updater to update the turn direction before entering this behavior.
+        _updater = con.register_context_updater(_spd, output_keys=[used_ctx_varname], input_keys=[])
+
+        # Set speed expressions and actions before entering, implementing random turning.
+        return cls(
+            speed_expressions=(f"-{used_ctx_varname}", f"{used_ctx_varname}"),
             used_context_variables=[used_ctx_varname],
             before_entering=[_updater],
         )
