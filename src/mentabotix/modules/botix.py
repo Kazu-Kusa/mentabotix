@@ -459,19 +459,22 @@ class MovingState:
                 raise ValueError("Invalid Direction. Must be one of ['l','r']")
         if weights:
 
+            total_weight = sum(weights)
+            norm_weights = tuple(weight / total_weight for weight in weights)
+            pack = list(zip(turn_speeds, norm_weights))
+
             def _spd() -> int:
                 # 计算权重总和并检查是否有负权重
-                total_weight = sum(weights)
 
                 # 生成一个随机数用于选择
                 rand_num = uniform(0, 1)
                 cum_weight = 0.0
 
                 # 遍历归一化后的权重，累加权重直到超过随机数，从而确定选择的索引
-                for i, weight in enumerate(weight / total_weight for weight in weights):
+                for index, weight in pack:
                     cum_weight += weight
-                    if rand_num <= cum_weight:
-                        return turn_speeds[i]
+                    if rand_num < cum_weight:
+                        return index
 
         else:
             _spd = lambda: choice(turn_speeds)
@@ -483,7 +486,7 @@ class MovingState:
         # Set speed expressions and actions before entering, implementing random turning.
 
         return cls(
-            speed_expressions=(f"{direction}*{used_ctx_varname}", f"{direction*-1}*{used_ctx_varname}"),
+            speed_expressions=(f"{direction}*{used_ctx_varname}", f"{direction * -1}*{used_ctx_varname}"),
             used_context_variables=[used_ctx_varname],
             before_entering=[_updater],
         )

@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import patch
 
-from mentabotix.modules.botix import MovingTransition, MovingState
+from bdmc.modules.controller import CloseLoopController, MotorInfo
+
+from mentabotix.modules.botix import MovingTransition, MovingState, Botix
 
 
 # Define a mock MovingState class for testing purposes
@@ -133,6 +135,39 @@ class TestMovingTransition(unittest.TestCase):
         transition1 = MovingTransition(self.default_duration, None, None, None, None)
         transition2 = MovingTransition(self.default_duration, None, None, None, None)
         self.assertNotEqual(hash(transition1), hash(transition2))
+
+    def test_som(self):
+        state_a = MovingState(100, -100)
+
+        end_state = MovingState(0)
+
+        state_b = MovingState(5000)
+
+        state_c = MovingState(
+            speed_expressions=("var1", "var2"),
+            used_context_variables=["var1", "var2"],
+        )
+
+        import random
+
+        con = CloseLoopController(
+            [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
+        ).start_msg_sending()
+
+        def breaker() -> int:
+            return random.randint(0, 2)
+
+        trans = MovingTransition(
+            2.0,
+            to_states={0: end_state, 1: state_b, 2: state_c},
+            from_states=state_a,
+            breaker=breaker,
+        )
+        botix = Botix(con)
+        botix.token_pool.append(trans)
+        func = botix.compile(False)
+
+        print(f"is callable {callable(func)}")
 
 
 if __name__ == "__main__":
