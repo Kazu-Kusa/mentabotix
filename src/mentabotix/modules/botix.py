@@ -320,6 +320,52 @@ class MovingState:
             raise ValueError(f"Variable {variable} not found in {speed_expressions}.")
 
     @classmethod
+    def rand_move(
+        cls,
+        con: CloseLoopController,
+        speeds: Sequence[Tuple[int, int, int, int]],
+        weights: Optional[Sequence[float | int]] = None,
+        used_ctx_varname: str = "rand_move",
+    ) -> Self:
+        """
+        Registers a random movement behavior with the given CloseLoopController.
+
+        This method randomly selects a speed tuple from the provided list and updates the turn direction
+        before entering the behavior. If weights are provided, the selection is made according to them.
+
+        Args:
+            con: CloseLoopController instance to register the behavior with.
+            speeds: A sequence of speed tuples, each representing velocities for four directions.
+            weights: Optional sequence of weights corresponding to the speeds. If given, the selection is weighted.
+            used_ctx_varname: str, the name of the context variable to store the selected speed.
+
+        Returns:
+            Self: An instance of the class with the random move behavior configured.
+        """
+        if weights and len(weights) != len(speeds):
+            raise ValueError(f"weights and speeds must have the same length, got speeds: {speeds}, weights: {weights}.")
+        indexes = tuple(range(len(speeds)))
+
+        # Register a context updater to update the turn direction before entering the behavior.
+        _updater = con.register_context_updater(
+            make_weighted_selector(speeds, weights) if weights else lambda: speeds[choice(indexes)],
+            output_keys=[used_ctx_varname],
+            input_keys=[],
+        )
+
+        # Configure speed expressions and actions before entering, implementing random turning.
+        return cls(
+            speed_expressions=(
+                f"{used_ctx_varname}[0]",
+                f"{used_ctx_varname}[1]",
+                f"{used_ctx_varname}[2]",
+                f"{used_ctx_varname}[3]",
+            ),
+            used_context_variables=[used_ctx_varname],
+            before_entering=[_updater],
+        )
+
+    @classmethod
     def halt(cls) -> Self:
         """
         Create a new instance of the class with a speed of 0, effectively halting the movement.
@@ -362,7 +408,8 @@ class MovingState:
         Returns:
 
         """
-
+        if weights and len(weights) != len(speeds):
+            raise ValueError(f"weights and speeds must have the same length, got speeds: {speeds}, weights: {weights}.")
         # Register a context updater to update the turn direction before entering this behavior.
         _updater = con.register_context_updater(
             make_weighted_selector(speeds, weights) if weights else lambda: choice(speeds),
