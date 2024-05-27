@@ -344,6 +344,40 @@ class MovingState:
         return cls(speed)
 
     @classmethod
+    def rand_spd_straight(
+        cls,
+        con: CloseLoopController,
+        speeds: Sequence[int],
+        weights: Optional[Sequence[float | int]] = None,
+        used_ctx_varname: str = "rand_speed",
+    ) -> Self:
+        """
+        Create a new instance of the class with a random speed.
+        Args:
+            con (CloseLoopController): CloseLoopController object, representing the instance to which the random turning control is applied.
+            speeds (Sequence[int]): A sequence of speeds.
+            weights (Optional[Sequence[float | int]]): Weights for each speed.
+            used_ctx_varname (str, optional): The name of the context variable to store the selected speed.
+
+        Returns:
+
+        """
+
+        # Register a context updater to update the turn direction before entering this behavior.
+        _updater = con.register_context_updater(
+            make_weighted_selector(speeds, weights) if weights else lambda: choice(speeds),
+            output_keys=[used_ctx_varname],
+            input_keys=[],
+        )
+
+        # Set speed expressions and actions before entering, implementing random turning.
+        return cls(
+            speed_expressions=used_ctx_varname,
+            used_context_variables=[used_ctx_varname],
+            before_entering=[_updater],
+        )
+
+    @classmethod
     def differential(cls, direction: Literal["l", "r"], radius: float, outer_speed: int) -> Self:
         """
         Create a new instance of the class with the specified differential movement.
