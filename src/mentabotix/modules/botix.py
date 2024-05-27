@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from itertools import zip_longest
 from queue import Queue
+from random import random
 from typing import (
     Tuple,
     TypeAlias,
@@ -23,9 +24,9 @@ from typing import (
     get_type_hints,
 )
 
-import numpy as np
 from bdmc import CloseLoopController
-from numpy.random import random
+from numpy import array, full, int32, equal
+from numpy.random import choice
 from terminaltables import SingleTable
 
 from mentabotix.tools.selectors import make_weighted_selector
@@ -236,7 +237,7 @@ class MovingState:
             ValueError: If the provided speeds do not match any of the above patterns.
         """
         self._speed_expressions: IndividualExpressionPattern
-        self._speeds: np.array
+        self._speeds: array
         self._pattern_type: PatternType
         match bool(speed_expressions), bool(speeds):
             case True, False:
@@ -275,15 +276,15 @@ class MovingState:
                 match speeds:
                     case (int(full_speed),):
                         self._pattern_type = PatternType.Full
-                        self._speeds = np.full((4,), full_speed)
+                        self._speeds = full((4,), full_speed)
                     case (int(left_speed), int(right_speed)):
                         self._pattern_type = PatternType.LR
 
-                        self._speeds = np.array([left_speed, left_speed, right_speed, right_speed])
+                        self._speeds = array([left_speed, left_speed, right_speed, right_speed])
                     case speeds if len(speeds) == 4 and all(isinstance(item, int) for item in speeds):
                         self._pattern_type = PatternType.Individual
 
-                        self._speeds = np.array(speeds)
+                        self._speeds = array(speeds)
                     case _:
                         types = tuple(type(item) for item in speeds)
                         raise ValueError(
@@ -472,7 +473,6 @@ class MovingState:
                 f"All turn speeds should be positive, got {turn_speeds}. "
                 f"Since you should not using the turn left with negative speed to represent turn right."
             )
-        from random import choice
 
         match direction:
             case "l":
@@ -577,7 +577,7 @@ class MovingState:
         Returns:
             Self: The modified object with the updated speeds.
         """
-        self._speeds = (self._speeds * multiplier).astype(np.int32)
+        self._speeds = (self._speeds * multiplier).astype(int32)
         return self
 
     def unwrap(self) -> Tuple[int, ...]:
@@ -752,7 +752,7 @@ class MovingState:
             return False
         else:
 
-            return all(np.equal(self._speeds, other._speeds)) and self._speed_expressions == other._speed_expressions
+            return all(equal(self._speeds, other._speeds)) and self._speed_expressions == other._speed_expressions
 
     def __str__(self):
         main_seq = self._speed_expressions if self._speeds is None else tuple(self._speeds)

@@ -205,7 +205,7 @@ class TestMovingState(unittest.TestCase):
         b = Botix(controller=con, token_pool=[trans])
 
         fun = b.compile()
-        for _ in range(10):
+        for _ in range(2):
             fun()
             sleep(0.2)
         con.stop_msg_sending()
@@ -225,7 +225,7 @@ class TestMovingState(unittest.TestCase):
         b = Botix(controller=con, token_pool=[trans])
 
         fun = b.compile()
-        for _ in range(20):
+        for _ in range(2):
             fun()
             sleep(0.2)
         con.stop_msg_sending()

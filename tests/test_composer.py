@@ -104,8 +104,8 @@ class TestComposer(unittest.TestCase):
         end_speed = 100
         duration = 5.0
         power_exponent = 1.0
-        interval = 0.07
-
+        interval = 0.3
+        lead_time = 0
         # 调用待测试函数
         states, transitions = straight_chain(
             start_speed=start_speed,
@@ -113,15 +113,17 @@ class TestComposer(unittest.TestCase):
             duration=duration,
             power_exponent=power_exponent,
             interval=interval,
+            lead_time=lead_time,
         )
 
         # 断言判断结果是否符合预期
-        self.assertEqual(len(states), int(duration / interval) + 1)
+        self.assertEqual(int(duration / interval) + 2, len(states))
         self.assertEqual(states[0].unwrap()[0], start_speed)
         self.assertEqual(states[-1].unwrap()[0], end_speed)
-        for i in range(len(transitions) - 1):
-            self.assertIsInstance(transitions[i], MovingTransition)
-            self.assertEqual(transitions[i].duration, interval)
+        for t in transitions[:-1]:
+            self.assertIsInstance(t, MovingTransition)
+            self.assertEqual(t.duration, interval)
+        self.assertAlmostEqual(duration - lead_time, sum(t.duration for t in transitions))
 
     # 测试有breaker函数的情况
     def test_straight_chain_with_breaker(self):
@@ -130,6 +132,7 @@ class TestComposer(unittest.TestCase):
         duration = 5.0
         power_exponent = 1.0
         interval = 0.1
+        lead_time = 0.05
 
         def break_function() -> bool:
             return random.random() < 0.1
@@ -141,15 +144,15 @@ class TestComposer(unittest.TestCase):
             duration=duration,
             power_exponent=power_exponent,
             interval=interval,
+            lead_time=lead_time,
             breaker=break_function,
         )
 
         # 断言判断结果是否符合预期
         self.assertTrue(any(isinstance(t, MovingTransition) and t.breaker for t in transitions))
         self.assertEqual(int(duration / interval), len(transitions))
-        self.assertAlmostEqual(duration, sum(t.duration for t in transitions))
-        self.assertEqual(int(duration / interval) + 1 + 1, len(states))  # 包含了break状态
-        self.assertIn(MovingState(0), states)  # 确认state_on_break被加入到states列表中
+        self.assertAlmostEqual(duration - lead_time, sum(t.duration for t in transitions))
+        self.assertEqual(int(duration / interval) + 1, len(states))  # 包含了break状态
 
     def test_exp(self):
         start_speed = 50

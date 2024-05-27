@@ -15,7 +15,7 @@ class TestEnum(Enum):
 
 class TestCaseRegistry(unittest.TestCase):
     def setUp(self):
-        self.case_registry = CaseRegistry({}, TestEnum)
+        self.case_registry = CaseRegistry(TestEnum)
 
     def test_init(self):
         self.assertIsInstance(self.case_registry._case_dict, dict)
