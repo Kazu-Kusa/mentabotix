@@ -1,6 +1,6 @@
 [project]
 name = "mentabotix"
-version = "0.1.5.6"
+version = "0.1.5.7"
 description = "A Bot control lib"
 authors = [
     { name = "Whth", email = "88489697+Whth@users.noreply.github.com" },
