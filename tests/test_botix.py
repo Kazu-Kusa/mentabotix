@@ -4,7 +4,7 @@ from typing import List
 
 from bdmc.modules.controller import CloseLoopController
 
-from mentabotix import Botix, MovingState, MovingTransition
+from mentabotix import Botix, MovingState, MovingTransition, ArrowStyle
 from mentabotix.modules.exceptions import StructuralError
 
 
@@ -349,6 +349,80 @@ class TestBotix(unittest.TestCase):
 
         correct = ".set_motors_speed((state0_val_tmp1:=(state0_context_getter_1()),state0_val_tmp1,state0_val_tmp1,state0_val_tmp1)).set_motors_speed((state1_val_tmp1:=(state1_context_getter_1()),state1_val_tmp1,state1_val_tmp2:=(state1_context_getter_2()),state1_val_tmp2)).set_motors_speed((state2_context_getter_1(), state2_context_getter_2(), state2_context_getter_3(), state2_context_getter_4())).set_motors_speed((state3_val_tmp1:=(state3_context_getter_1()),state3_val_tmp1,100,100)).set_motors_speed((state4_context_getter_1(), state4_context_getter_2(), state4_context_getter_3(), 666)).set_motors_speed((500,500,state5_val_tmp2:=(state5_context_getter_1()),state5_val_tmp2)).set_motors_speed((state6_val_tmp1:=((state6_context_getter_temp_1:=state6_context_getter_1())),state6_val_tmp1,state6_val_tmp2:=(state6_context_getter_2()*state6_context_getter_temp_1),state6_val_tmp2))"
         self.assertEqual(correct, std_out)
+
+    def test_before_after_rendering(self):
+        MovingState.__state_id_counter__ = 0
+        MovingTransition.__transition_id_counter__ = 0
+
+        def tes_1() -> None: ...
+        def tes_2(): ...
+
+        def tes_3(): ...
+
+        state_a = MovingState(100, before_entering=[tes_1, tes_2], after_exiting=[tes_3])
+        state_b = MovingState(200, before_entering=[tes_3])
+        state_c = MovingState(300, after_exiting=[tes_3])
+        state_d = MovingState(400)
+        state_e = MovingState(500)
+        state_f = MovingState(600)
+
+        def transition_breaker_fac(lst: List[int]):
+            def _inner() -> int:
+                return random.choice(lst)
+
+            return _inner
+
+        transition_a_bcd = MovingTransition(
+            duration=1,
+            from_states=state_a,
+            to_states={1: state_b, 2: state_c, 3: state_d},
+            breaker=transition_breaker_fac([1, 2, 3]),
+        )
+        transition_d_ef = MovingTransition(
+            duration=1,
+            from_states=state_d,
+            to_states={1: state_e, 2: state_f},
+            breaker=transition_breaker_fac([1, 2]),
+        )
+        self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
+        self.botix_instance.export_structure("test_entering_exiting.puml", self.botix_instance.token_pool)
+
+    def test_display_direction(self):
+        MovingState.__state_id_counter__ = 0
+        MovingTransition.__transition_id_counter__ = 0
+
+        def tes_1() -> None: ...
+        def tes_2(): ...
+
+        def tes_3(): ...
+
+        state_a = MovingState(100, before_entering=[tes_1, tes_2], after_exiting=[tes_3])
+        state_b = MovingState(200, before_entering=[tes_3])
+        state_c = MovingState(300, after_exiting=[tes_3])
+        state_d = MovingState(400)
+        state_e = MovingState(500)
+        state_f = MovingState(600)
+
+        def transition_breaker_fac(lst: List[int]):
+            def _inner() -> int:
+                return random.choice(lst)
+
+            return _inner
+
+        transition_a_bcd = MovingTransition(
+            duration=1,
+            from_states=state_a,
+            to_states={1: state_b, 2: state_c, 3: state_d},
+            breaker=transition_breaker_fac([1, 2, 3]),
+        )
+        transition_d_ef = MovingTransition(
+            duration=1,
+            from_states=state_d,
+            to_states={1: state_e, 2: state_f},
+            breaker=transition_breaker_fac([1, 2]),
+        )
+        self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
+        self.botix_instance.export_structure("test_left.puml", self.botix_instance.token_pool, ArrowStyle.UP)
 
 
 if __name__ == "__main__":

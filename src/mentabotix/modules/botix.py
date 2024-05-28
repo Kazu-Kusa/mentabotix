@@ -1,8 +1,8 @@
 import inspect
 from collections import Counter
 from dataclasses import dataclass
-from enum import Enum
-from itertools import zip_longest
+from enum import Enum, StrEnum
+from itertools import zip_longest, chain
 from queue import Queue
 from random import random
 from typing import (
@@ -61,6 +61,21 @@ class PatternType(Enum):
     Individual = 4
 
 
+class ArrowStyle(StrEnum):
+    """
+    Attributes:
+        DOWN: "-->"
+        LEFT: "-left->"
+        RIGHT: "-right->"
+        UP: "-up->"
+    """
+
+    DOWN = "-->"
+    LEFT = "-left->"
+    RIGHT = "-right->"
+    UP = "-up->"
+
+
 def get_function_annotations(func: Callable) -> str:
     """
     Get the function annotations of a given function.
@@ -101,7 +116,7 @@ def get_function_annotations(func: Callable) -> str:
 
     # Concatenate the parameter type strings and return type to form the annotation string
     params_str = ", ".join(param_types)
-    return f"{func.__name__}({params_str}) -> {return_type}"
+    return f"def {func.__name__}({params_str}) -> {return_type}"
 
 
 def convert_type_str(hint) -> str:
@@ -114,13 +129,26 @@ def convert_type_str(hint) -> str:
     Returns:
         str: The string representation of the type hint.
     """
-    if hint is None:
+    if hint == type(None):
         return "None"
     elif hint in {int, float, bool, str, list, tuple, set, dict}:
         return hint.__name__
     else:
         # For other types, convert directly to string
         return str(hint).replace("typing.", "")
+
+
+def bold(string: str) -> str:
+    """
+    Takes a string as input and returns the same string surrounded by double asterisks.
+
+    Parameters:
+        string (str): The string to be formatted.
+
+    Returns:
+        str: The input string surrounded by double asterisks.
+    """
+    return f"**{string}**"
 
 
 class MovingState:
@@ -1594,77 +1622,110 @@ class Botix:
                 return compiled_lines
 
     @classmethod
-    def export_structure(cls, save_path: str, transitions: TokenPool) -> Self:
+    def export_structure(
+        cls,
+        save_path: str,
+        transitions: TokenPool,
+        arrow_style: ArrowStyle | Literal["up", "down", "left", "right"] | str = "down",
+    ) -> Self:
         """
         Export the structure to a UML file based on the provided transitions.
 
         Args:
             save_path (str): The path to save the UML file.
             transitions (Optional[List[MovingTransition]]): The list of transitions to represent in the UML.
-
+            arrow_style (Optional[ArrowStyle]): The style of the arrows to use in the UML. Defaults to "down".
         Returns:
             Self: The current instance.
         """
+
+        if isinstance(arrow_style, ArrowStyle):
+            arrow = arrow_style
+        else:
+            upper = arrow_style.upper()
+            matched = list(filter(lambda x: x.name == upper, ArrowStyle))
+            if matched:
+                arrow = matched[0]
+            else:
+                raise ValueError(f"Must be one of {list(ArrowStyle)}, but got unknown arrow style: {arrow_style}")
+
         start_string = "@startuml\n"
         end_string = "@enduml\n"
 
-        undefined_to_state = "undefined"
-        used_state: Dict[MovingState, str] = {}
+        undefined_to_state = "undefined_to_state"
+        undefined_from_state = "undefined_from_state"
 
+        states_alias_mapping: Dict[MovingState, str] = {}
+        state_name_gen: NameGenerator = NameGenerator(basename="state_")
+        all_states: Set[MovingState] = set(
+            chain(*[transition.from_states + list(transition.to_states.values()) for transition in transitions])
+        )
         lines: List[str] = []
-        name_gen: NameGenerator = NameGenerator(basename="state_")
+        for state in all_states:
+            states_alias_mapping[state] = (state_alias := state_name_gen())
+            state_name = f"{state.state_id}-MovingState"
+            lines.insert(0, f'state "{state_name}" as {state_alias}\n')
+            state_cmds_expr = bold((string := str(state))[string.index("(") :])
+
+            before_entering_desc = (
+                f"{bold('Before:')}\\n"
+                + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.before_entering)
+                + "\\n"
+                if state.before_entering
+                else ""
+            )
+
+            after_entering_desc = (
+                f"{bold('After:')}\\n"
+                + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.after_exiting)
+                + "\\n"
+                if state.after_exiting
+                else ""
+            )
+            if before_entering_desc or after_entering_desc:
+                description = f"{state_cmds_expr}\\n====\\n{before_entering_desc}{after_entering_desc}"
+            else:
+                description = state_cmds_expr
+            lines.insert(1, f"{state_alias}: {description}\n")
+
         break_gen: NameGenerator = NameGenerator(basename="break_")
         for transition in transitions:
-            for from_state in transition.from_states:
 
-                if from_state in used_state:
-                    from_state_alias = used_state.get(from_state)
-                else:
-                    from_state_alias: str = name_gen()
-                    used_state[from_state] = from_state_alias
-                    lines.insert(0, f'state "{from_state}" as {from_state_alias}\n')
+            for from_state in transition.from_states:
 
                 match len(transition.to_states):
                     case 0:
-                        lines.append(f"{from_state_alias} --> {undefined_to_state}\n")
-
+                        lines.append(f"{states_alias_mapping.get(from_state)} {arrow} {undefined_to_state}\n")
                         lines.append(f"note on link\nThis transition does not define a to_states\nend note\n")
                     case 1:
                         to_state = list(transition.to_states.values())[0]
-                        if to_state not in used_state:
-                            to_state_alias: str = name_gen()
-                            used_state[to_state] = to_state_alias
-                            lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
-                        else:
-                            to_state_alias = used_state.get(to_state)
-                        lines.append(f"{from_state_alias} --> {to_state_alias}\n")
+
+                        lines.append(
+                            f"{states_alias_mapping.get(from_state)} {arrow} {states_alias_mapping.get(to_state)}\n"
+                        )
                     case _:
                         if not callable(transition.breaker):
                             raise ValueError(
                                 "The break function must be callable. Since branch must need a valid breaker."
                             )
                         break_node_name: str = break_gen()
+
                         lines.insert(0, f"state {break_node_name} <<choice>>\n")
                         lines.insert(
                             1, f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n"
                         )
-                        lines.append(f"{from_state_alias} --> {break_node_name}\n")
+                        lines.append(f"{states_alias_mapping.get(from_state)} {arrow} {break_node_name}\n")
                         for case_name, to_state in transition.to_states.items():
 
-                            if to_state not in used_state:
-                                to_state_alias: str = name_gen()
-                                used_state[to_state] = to_state_alias
-                                lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
-                            else:
-                                to_state_alias = used_state.get(to_state)
-
-                            lines.append(f"{break_node_name} --> {to_state_alias}: {case_name}\n")
+                            lines.append(
+                                f"{break_node_name} {arrow} {states_alias_mapping.get(to_state)}: {case_name}\n"
+                            )
 
         start_states: Set[MovingState] = Botix.acquire_start_states(token_pool=transitions)
         end_states: Set[MovingState] = Botix.acquire_end_states(token_pool=transitions)
 
-        start_heads: List[str] = [f"[*] --> {used_state.get(sta)}\n" for sta in start_states]
-        end_heads: List[str] = [f"{used_state.get(sta)} --> [*]\n" for sta in end_states]
+        start_heads: List[str] = [f"[*] {arrow} {states_alias_mapping.get(sta)}\n" for sta in start_states]
+        end_heads: List[str] = [f"{states_alias_mapping.get(sta)} {arrow} [*]\n" for sta in end_states]
 
         with open(save_path, "w") as f:
 

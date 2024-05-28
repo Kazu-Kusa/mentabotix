@@ -1,4 +1,4 @@
-from .modules.botix import MovingState, MovingTransition, Botix
+from .modules.botix import MovingState, MovingTransition, Botix, ArrowStyle
 from .modules.exceptions import BadSignatureError, RequirementError, SamplerTypeError, TokenizeError, StructuralError
 from .modules.logger import set_log_level
 from .modules.menta import Menta, SequenceSampler, IndexedSampler, DirectSampler, SamplerUsage, SamplerType, Sampler
@@ -21,6 +21,7 @@ __all__ = [
     "MovingState",
     "MovingTransition",
     "Botix",
+    "ArrowStyle",
     # menta
     "Menta",
     "SequenceSampler",
