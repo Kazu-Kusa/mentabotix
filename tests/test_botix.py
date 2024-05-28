@@ -424,6 +424,31 @@ class TestBotix(unittest.TestCase):
         self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
         self.botix_instance.export_structure("test_left.puml", self.botix_instance.token_pool, ArrowStyle.UP)
 
+    def test_empty_isolated_trans(self):
+        state_a = MovingState(100)
+
+        state_e = MovingState(500)
+        state_f = MovingState(600)
+
+        def transition_breaker_fac(lst: List[int]):
+            def _inner() -> int:
+                return random.choice(lst)
+
+            return _inner
+
+        transition_a_bcd = MovingTransition(
+            duration=1,
+            from_states=state_a,
+            breaker=transition_breaker_fac([1, 2, 3]),
+        )
+        transition_d_ef = MovingTransition(
+            duration=1,
+            to_states={1: state_e, 2: state_f},
+            breaker=transition_breaker_fac([1, 2]),
+        )
+        self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
+        self.botix_instance.export_structure("test_isolated.puml", self.botix_instance.token_pool)
+
 
 if __name__ == "__main__":
     unittest.main()

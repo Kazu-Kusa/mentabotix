@@ -1638,7 +1638,8 @@ class Botix:
         Returns:
             Self: The current instance.
         """
-
+        undefined_to_state = "UNDEFINED_TO_STATE"
+        undefined_from_state = "UNDEFINED_FROM_STATE"
         if isinstance(arrow_style, ArrowStyle):
             arrow = arrow_style
         else:
@@ -1652,41 +1653,20 @@ class Botix:
         start_string = "@startuml\n"
         end_string = "@enduml\n"
 
-        undefined_to_state = "undefined_to_state"
-        undefined_from_state = "undefined_from_state"
-
-        states_alias_mapping: Dict[MovingState, str] = {}
+        states_alias_mapping: Dict[MovingState, str] = {}  # type: ignore
         state_name_gen: NameGenerator = NameGenerator(basename="state_")
         all_states: Set[MovingState] = set(
             chain(*[transition.from_states + list(transition.to_states.values()) for transition in transitions])
         )
         lines: List[str] = []
+        if no_from := list(filter(lambda x: not x.from_states, transitions)):
+
+            states_alias_mapping[undefined_from_state] = undefined_from_state  # type: ignore
+            for t in no_from:
+                t: MovingTransition
+                t.from_states.append(undefined_from_state)  # type: ignore
         for state in all_states:
-            states_alias_mapping[state] = (state_alias := state_name_gen())
-            state_name = f"{state.state_id}-MovingState"
-            lines.insert(0, f'state "{state_name}" as {state_alias}\n')
-            state_cmds_expr = bold((string := str(state))[string.index("(") :])
-
-            before_entering_desc = (
-                f"{bold('Before:')}\\n"
-                + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.before_entering)
-                + "\\n"
-                if state.before_entering
-                else ""
-            )
-
-            after_entering_desc = (
-                f"{bold('After:')}\\n"
-                + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.after_exiting)
-                + "\\n"
-                if state.after_exiting
-                else ""
-            )
-            if before_entering_desc or after_entering_desc:
-                description = f"{state_cmds_expr}\\n====\\n{before_entering_desc}{after_entering_desc}"
-            else:
-                description = state_cmds_expr
-            lines.insert(1, f"{state_alias}: {description}\n")
+            cls._inject_state_meta_info(lines, state, state_name_gen, states_alias_mapping)
 
         break_gen: NameGenerator = NameGenerator(basename="break_")
         for transition in transitions:
@@ -1721,6 +1701,10 @@ class Botix:
                                 f"{break_node_name} {arrow} {states_alias_mapping.get(to_state)}: {case_name}\n"
                             )
 
+        if no_from:
+            for t in no_from:
+                t: MovingTransition
+                t.from_states.remove(undefined_from_state)  # type: ignore
         start_states: Set[MovingState] = Botix.acquire_start_states(token_pool=transitions)
         end_states: Set[MovingState] = Botix.acquire_end_states(token_pool=transitions)
 
@@ -1731,6 +1715,38 @@ class Botix:
 
             f.writelines([start_string, *lines, "\n", *start_heads, "\n", *end_heads, "\n", end_string])
         return cls
+
+    @classmethod
+    def _inject_state_meta_info(
+        cls,
+        lines: List[str],
+        state: MovingState,
+        state_name_gen: NameGenerator,
+        states_alias_mapping: Dict[MovingState, str],
+    ):
+        states_alias_mapping[state] = (state_alias := state_name_gen())
+        state_name = f"{state.state_id}-MovingState"
+        lines.insert(0, f'state "{state_name}" as {state_alias}\n')
+        state_cmds_expr = bold((string := str(state))[string.index("(") :])
+        before_entering_desc = (
+            f"{bold('Before:')}\\n"
+            + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.before_entering)
+            + "\\n"
+            if state.before_entering
+            else ""
+        )
+        after_entering_desc = (
+            f"{bold('After:')}\\n"
+            + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.after_exiting)
+            + "\\n"
+            if state.after_exiting
+            else ""
+        )
+        if before_entering_desc or after_entering_desc:
+            description = f"{state_cmds_expr}\\n====\\n{before_entering_desc}{after_entering_desc}"
+        else:
+            description = state_cmds_expr
+        lines.insert(1, f"{state_alias}: {description}\n")
 
     def compile(self, return_median: bool = False) -> Callable[[], None] | Tuple[List[str], Context]:
         """
