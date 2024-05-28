@@ -5,11 +5,11 @@
 groups = ["default", "dev", "matplotlib"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:2a1c1b00aba60256ae7374a3bf61c1a73debc9445b22c90783105eda4ac3144d"
+content_hash = "sha256:9318e61df72b4fee1d717b49be604f5893c96406572c7a43a5e46abd34009ff5"
 
 [[package]]
 name = "bdmc"
-version = "0.1.5.10"
+version = "0.1.5.11"
 requires_python = ">=3.11"
 summary = "An api wrapper lib designed for the uptech BDMC divers"
 groups = ["default"]
@@ -18,8 +18,8 @@ dependencies = [
     "pyserial>=3.5",
 ]
 files = [
-    {file = "bdmc-0.1.5.10-py3-none-any.whl", hash = "sha256:76d92abc6cb78924c5d0f5e77b9560e16e156b0801479746b3c0d8ba003e6a61"},
-    {file = "bdmc-0.1.5.10.tar.gz", hash = "sha256:9abd4ed2413c6a643611a3c1d37826bc0a7443fb26c75eb9a522c1f0f5fc8d36"},
+    {file = "bdmc-0.1.5.11-py3-none-any.whl", hash = "sha256:dc79e863f8abee81ebed2c2880d39bfd6859fc10fc13edaa26f99c7c31203200"},
+    {file = "bdmc-0.1.5.11.tar.gz", hash = "sha256:816fb618b85db1cf40108557373516f92a0d207bd885d30f72e0cb121ccf49f0"},
 ]
 
 [[package]]

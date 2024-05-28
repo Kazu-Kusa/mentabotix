@@ -9,7 +9,7 @@ dependencies = [
     "coloredlogs>=15.0.1",
     "numpy>=1.26.4",
     "terminaltables>=3.1.10",
-    "bdmc>=0.1.5.10",
+    "bdmc>=0.1.5.11",
     "pyuptech>=0.1.6.4",
 ]
 requires-python = ">=3.11"
