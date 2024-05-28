@@ -375,10 +375,10 @@ class MovingState:
         indexes = tuple(range(len(speeds)))
 
         # Register a context updater to update the turn direction before entering the behavior.
-        _updater = con.register_context_updater(
+        _updater = con.register_context_executor(
             make_weighted_selector(speeds, weights) if weights else lambda: speeds[choice(indexes)],
             output_keys=[used_ctx_varname],
-            input_keys=[],
+            function_name=f"update_{used_ctx_varname}",
         )
 
         # Configure speed expressions and actions before entering, implementing random turning.
@@ -439,10 +439,10 @@ class MovingState:
         if weights and len(weights) != len(speeds):
             raise ValueError(f"weights and speeds must have the same length, got speeds: {speeds}, weights: {weights}.")
         # Register a context updater to update the turn direction before entering this behavior.
-        _updater = con.register_context_updater(
+        _updater = con.register_context_executor(
             make_weighted_selector(speeds, weights) if weights else lambda: choice(speeds),
             output_keys=[used_ctx_varname],
-            input_keys=[],
+            function_name=f"update_{used_ctx_varname}",
         )
 
         # Set speed expressions and actions before entering, implementing random turning.
@@ -545,7 +545,9 @@ class MovingState:
             return 1 if random() < turn_left_prob else -1
 
         # Register a context updater to update the turn direction before entering this behavior.
-        _updater = con.register_context_updater(_dir, output_keys=[used_ctx_varname], input_keys=[])
+        _updater = con.register_context_executor(
+            _dir, output_keys=[used_ctx_varname], function_name=f"update_{used_ctx_varname}"
+        )
 
         # Set speed expressions and actions before entering, implementing random turning.
         return cls(
@@ -594,7 +596,9 @@ class MovingState:
 
         # Register a context updater to update the turn direction before entering this behavior.
 
-        _updater = con.register_context_updater(_spd, output_keys=[used_ctx_varname], input_keys=[])
+        _updater = con.register_context_executor(
+            _spd, output_keys=[used_ctx_varname], function_name=f"update_{used_ctx_varname}"
+        )
 
         # Set speed expressions and actions before entering, implementing random turning.
 
@@ -633,7 +637,9 @@ class MovingState:
         _spd = make_weighted_selector(turn_speeds, weights) if weights else lambda: choice(turn_speeds)
 
         # Register a context updater to update the turn direction before entering this behavior.
-        _updater = con.register_context_updater(_spd, output_keys=[used_ctx_varname], input_keys=[])
+        _updater = con.register_context_executor(
+            _spd, output_keys=[used_ctx_varname], function_name=f"update_{used_ctx_varname}"
+        )
 
         # Set speed expressions and actions before entering, implementing random turning.
         return cls(

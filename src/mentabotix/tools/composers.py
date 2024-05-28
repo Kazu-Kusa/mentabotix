@@ -214,26 +214,6 @@ class MovingChainComposer:
         self._flip()
         return self
 
-    def _mid_transition_inject(self, states, transitions):
-        for sta, tran in zip(states, transitions):
-            # Ensure each state is in the corresponding transition's to_states
-            if sta not in tran.to_states.values():
-                raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
-            if self.last_state and self.last_state not in tran.from_states:
-                raise ValueError(f"The state {self.last_state} should be in the from_states of the transition {tran}!")
-            self._chain_container[MovingState].append(sta)
-            self._chain_container[MovingTransition].append(tran)
-
-    def _mid_state_inject(self, states, transitions):
-        for sta, tran in zip(states, transitions):
-            # Ensure each state is in the corresponding transition's from_states
-            if sta not in tran.from_states:
-                raise ValueError(f"The state {sta} should be in the from_states of the transition {tran}!")
-            if sta not in self.last_transition.to_states.values():
-                raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
-            self._chain_container[MovingState].append(sta)
-            self._chain_container[MovingTransition].append(tran)
-
 
 KT = TypeVar("KT", bound=Hashable)
 
