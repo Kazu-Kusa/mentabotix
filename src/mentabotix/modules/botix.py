@@ -1608,6 +1608,7 @@ class Botix:
         start_string = "@startuml\n"
         end_string = "@enduml\n"
 
+        undefined_to_state = "undefined"
         used_state: Dict[MovingState, str] = {}
 
         lines: List[str] = []
@@ -1623,34 +1624,41 @@ class Botix:
                     used_state[from_state] = from_state_alias
                     lines.insert(0, f'state "{from_state}" as {from_state_alias}\n')
 
-                if len(transition.to_states) == 1:
-                    to_state = list(transition.to_states.values())[0]
-                    if to_state not in used_state:
-                        to_state_alias: str = name_gen()
-                        used_state[to_state] = to_state_alias
-                        lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
-                    else:
-                        to_state_alias = used_state.get(to_state)
-                    lines.append(f"{from_state_alias} --> {to_state_alias}\n")
-                else:
-                    if not callable(transition.breaker):
-                        raise ValueError("The break function must be callable. Since branch must need a valid breaker.")
-                    break_node_name: str = break_gen()
-                    lines.insert(0, f"state {break_node_name} <<choice>>\n")
-                    lines.insert(
-                        1, f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n"
-                    )
-                    lines.append(f"{from_state_alias} --> {break_node_name}\n")
-                    for case_name, to_state in transition.to_states.items():
+                match len(transition.to_states):
+                    case 0:
+                        lines.append(f"{from_state_alias} --> {undefined_to_state}\n")
 
+                        lines.append(f"note on link\nThis transition does not define a to_states\nend note\n")
+                    case 1:
+                        to_state = list(transition.to_states.values())[0]
                         if to_state not in used_state:
                             to_state_alias: str = name_gen()
                             used_state[to_state] = to_state_alias
                             lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
                         else:
                             to_state_alias = used_state.get(to_state)
+                        lines.append(f"{from_state_alias} --> {to_state_alias}\n")
+                    case _:
+                        if not callable(transition.breaker):
+                            raise ValueError(
+                                "The break function must be callable. Since branch must need a valid breaker."
+                            )
+                        break_node_name: str = break_gen()
+                        lines.insert(0, f"state {break_node_name} <<choice>>\n")
+                        lines.insert(
+                            1, f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n"
+                        )
+                        lines.append(f"{from_state_alias} --> {break_node_name}\n")
+                        for case_name, to_state in transition.to_states.items():
 
-                        lines.append(f"{break_node_name} --> {to_state_alias}: {case_name}\n")
+                            if to_state not in used_state:
+                                to_state_alias: str = name_gen()
+                                used_state[to_state] = to_state_alias
+                                lines.insert(0, f'state "{to_state}" as {to_state_alias}\n')
+                            else:
+                                to_state_alias = used_state.get(to_state)
+
+                            lines.append(f"{break_node_name} --> {to_state_alias}: {case_name}\n")
 
         start_states: Set[MovingState] = Botix.acquire_start_states(token_pool=transitions)
         end_states: Set[MovingState] = Botix.acquire_end_states(token_pool=transitions)

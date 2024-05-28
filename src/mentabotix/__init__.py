@@ -10,6 +10,7 @@ from .tools.composers import (
     snaking_chain,
     scanning_chain,
     random_lr_turn_branch,
+    copy,
 )
 from .tools.generators import NameGenerator, Multipliers, make_multiplier_generator
 from .tools.selectors import make_weighted_selector
@@ -41,6 +42,7 @@ __all__ = [
     "snaking_chain",
     "scanning_chain",
     "random_lr_turn_branch",
+    "copy",
     # tools/generators
     "NameGenerator",
     "Multipliers",

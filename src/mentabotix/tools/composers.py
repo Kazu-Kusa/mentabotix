@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import List, Tuple, Callable, Optional, Self, Type, TypeVar, Dict, Hashable
+from itertools import zip_longest
+from typing import List, Tuple, Callable, Optional, Self, Type, TypeVar, Dict, Hashable, Iterable
 
 from numpy.random import random
 
@@ -8,6 +9,7 @@ from ..modules.botix import MovingState, MovingTransition, __PLACE_HOLDER__
 StateTransitionPack = Tuple[List[MovingState], List[MovingTransition]]
 
 UnitType = TypeVar("UnitType", Type[MovingState], Type[MovingTransition])
+SupportClone = TypeVar("SupportClone", MovingState, MovingTransition)
 from terminaltables import SingleTable
 
 
@@ -103,10 +105,10 @@ class MovingChainComposer:
         """
         unit_type = type(unit)
         if unit_type != self.next_need:
-            raise ValueError(f"Need {self.next_need}, got {unit}!")
+            raise ValueError(f"Need {self.next_need}, got {type(unit)}, which is {repr(unit)}!")
         elif unit_type == MovingState:
             self._chain_container[MovingState].append(unit)
-            if self.last_transition:
+            if self.last_transition and unit not in self.last_transition.to_states.values():
                 self.last_transition.to_states[register_case] = unit
         elif unit_type == MovingTransition:
             unit.from_states.append(self.last_state) if self.last_state not in unit.from_states else None
@@ -116,14 +118,19 @@ class MovingChainComposer:
         self._flip()
         return self
 
-    def concat(self, states: List[MovingState], transitions: List[MovingTransition]) -> Self:
+    def concat(
+        self,
+        states: List[MovingState],
+        transitions: List[MovingTransition],
+        register_case: Optional[Hashable] = __PLACE_HOLDER__,
+    ) -> Self:
         """
         Concatenates the given list of states and transitions into the current data structure.
 
         Args:
             states: A list of MovingState objects representing the states to concatenate.
             transitions: A list of MovingTransition objects representing the transitions to concatenate.
-
+            register_case (Optional[Hashable]): The case to register the state or transition with.
         Returns:
             Returns the concatenated data structure itself.
 
@@ -134,92 +141,98 @@ class MovingChainComposer:
 
         This function checks the validity of the input and connects the states and transitions accordingly.
         It handles different scenarios based on whether there's an initial state and the difference between the lengths of states and transitions.
-        """
-
+        """  # FIXME
+        state_len, trans_len = len(states), len(transitions)
         # Check if at least one state and one transition are provided
         if not (states or transitions):
             raise ValueError("Need at least one state and one transition!")
+        elif not abs(state_len - trans_len) <= 1:
+            raise ValueError(
+                f"The number of states and transitions don't match by no more than 1! "
+                f"Got {state_len} states and {trans_len} transitions!"
+            )
 
         # Initialize the head transition and check if it has a starting state
         head_transition = transitions[0]
-        has_start_state = len(head_transition.from_states) == 1
+        has_start_state = bool(head_transition.from_states)
         head_state = states[0]
 
         # Validate the expected next element type (state or transition) based on the initial condition
         if self.next_need == MovingTransition and has_start_state:
-            raise ValueError(f"Need {self.next_need}, got {head_transition.from_states[0]}!")
+            raise ValueError(f"Need {MovingTransition}, but got {head_state}!")
         elif self.next_need == MovingState and not has_start_state:
-            raise ValueError(f"Need {self.next_need}, got {head_transition.to_states}!")
-        elif self.next_need == MovingState and head_transition.from_states[0] != head_state:
-            raise ValueError(f"The transition {head_transition} should only start from {head_state}!")
+            raise ValueError(f"Need {MovingState}, but the head of the seq is {repr(head_transition)}!")
+        elif self.next_need == MovingState and head_state not in head_transition.from_states:
+            raise ValueError(f"The transition {repr(head_transition)} should only start from {head_state}!")
 
         # Reset the states and transitions lists for concatenation
-        states: List[MovingState]
-        transitions: List[MovingTransition]
+        states: List[MovingState] = list(states)
+        transitions: List[MovingTransition] = list(transitions)
 
-        # Connect the states and transitions based on the presence of an initial state and their lengths
-        match has_start_state, len(states), len(transitions):
-            case True, sta_len, tran_len if sta_len == tran_len:
-                # If there's an initial state and the lengths match, connect them normally
-                if self.last_transition:
-                    self.last_transition.to_states[__PLACE_HOLDER__] = head_state
+        if has_start_state:
 
-                for sta, tran in zip(states, transitions):
-                    # Ensure each state is in the corresponding transition's from_states
-                    if sta not in tran.from_states:
-                        raise ValueError(f"The state {sta} should be in the from_states of the transition {tran}!")
-                    self._chain_container[MovingState].append(sta)
-                    self._chain_container[MovingTransition].append(tran)
+            start_state = states.pop(0)
+            self.add(start_state, register_case)
 
-            case False, sta_len, tran_len if sta_len == tran_len:
-                # If there's no initial state and the lengths match, connect them differently
-                if self.last_state:
-                    head_transition.from_states.append(self.last_state)
+        for sta, trans in zip_longest(states, transitions):
+            self._add_with_connection_check(trans) if trans else None
+            self._add_with_connection_check(sta) if sta else None
+        return self
 
-                for sta, tran in zip(states, transitions):
-                    # Ensure each state is in the corresponding transition's to_states
-                    if sta not in tran.to_states.values():
-                        raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
-                    self._chain_container[MovingState].append(sta)
-                    self._chain_container[MovingTransition].append(tran)
+    def _add_with_connection_check(self, unit: MovingState | MovingTransition) -> Self:
+        """
+        Adds a `MovingState` or `MovingTransition` object to the chain container.
 
-            case True, sta_len, tran_len if sta_len - tran_len == 1:
-                # If there's an extra state
-                excessive_state = states.pop(0)
-                if self.last_transition:
-                    self.last_transition.to_states[__PLACE_HOLDER__] = excessive_state
+        Args:
+            unit (MovingState | MovingTransition): The unit to be added to the chain container.
 
-                self._chain_container[MovingState].append(excessive_state)
-                for sta, tran in zip(states, transitions):
-                    # Ensure each state is in the corresponding transition's to_states
-                    if sta not in tran.to_states.values():
-                        raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
+        Returns:
+            Self: The current instance of the class.
 
-                    self._chain_container[MovingState].append(sta)
-                    self._chain_container[MovingTransition].append(tran)
-                self._flip()  # Flip the internal representation to accommodate the new connection
-
-            case False, sta_len, tran_len if sta_len - tran_len == -1:
-                # If there's an extra transition
-                excessive_transition = transitions.pop(0)
-                excessive_transition.from_states.append(self.last_state)
-                self._chain_container[MovingTransition].append(excessive_transition)
-                for sta, tran in zip(states, transitions):
-                    # Ensure each state is in the corresponding transition's from_states
-                    if sta not in tran.from_states:
-                        raise ValueError(f"The state {sta} should be in the from_states of the transition {tran}!")
-                    self._chain_container[MovingState].append(sta)
-                    self._chain_container[MovingTransition].append(tran)
-                self._flip()  # Flip the internal representation to accommodate the new connection
-
-            case _, _, _:
-                # If the lengths differ by more than 1, the data pack is invalid
+        Raises:
+            ValueError: If the type of the unit does not match the next need.
+            RuntimeError: If the type of the unit is neither `MovingState` nor `MovingTransition`.
+        """
+        unit_type = type(unit)
+        if unit_type != self.next_need:
+            raise ValueError(f"Need {self.next_need}, got {type(unit)}, which is {repr(unit)}!")
+        elif unit_type == MovingState:
+            self._chain_container[MovingState].append(unit)
+            if self.last_transition and unit not in self.last_transition.to_states.values():
                 raise ValueError(
-                    f"The data pack {states} {transitions} is not valid! "
-                    f"A DataPack should have a length difference no more than 1!"
+                    f"Connection break! The state {unit} should be in the to_states of the transition {self.last_transition}!"
+                )
+        elif unit_type == MovingTransition:
+            if self.last_state not in unit.from_states:
+                raise ValueError(
+                    f"Connection break! The state {self.last_state} should be in the from_states of the transition {repr(unit)}!"
                 )
 
+            self._chain_container[MovingTransition].append(unit)
+        else:
+            raise RuntimeError("Should never reach here!")
+        self._flip()
         return self
+
+    def _mid_transition_inject(self, states, transitions):
+        for sta, tran in zip(states, transitions):
+            # Ensure each state is in the corresponding transition's to_states
+            if sta not in tran.to_states.values():
+                raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
+            if self.last_state and self.last_state not in tran.from_states:
+                raise ValueError(f"The state {self.last_state} should be in the from_states of the transition {tran}!")
+            self._chain_container[MovingState].append(sta)
+            self._chain_container[MovingTransition].append(tran)
+
+    def _mid_state_inject(self, states, transitions):
+        for sta, tran in zip(states, transitions):
+            # Ensure each state is in the corresponding transition's from_states
+            if sta not in tran.from_states:
+                raise ValueError(f"The state {sta} should be in the from_states of the transition {tran}!")
+            if sta not in self.last_transition.to_states.values():
+                raise ValueError(f"The state {sta} should be in the to_states of the transition {tran}!")
+            self._chain_container[MovingState].append(sta)
+            self._chain_container[MovingTransition].append(tran)
 
 
 KT = TypeVar("KT", bound=Hashable)
@@ -523,3 +536,16 @@ def random_lr_turn_branch(
         duration=turn_duration,
     )
     return start_transition, turn_transition
+
+
+def copy(iters: Iterable[SupportClone]) -> List[SupportClone]:
+    """
+    Returns a new list containing clones of the elements in the input iterable.
+
+    Args:
+        iters (Iterable[SupportClone]): An iterable of objects that support the `clone()` method.
+
+    Returns:
+        List[SupportClone]: A new list containing clones of the input objects.
+    """
+    return [i.clone() for i in iters]

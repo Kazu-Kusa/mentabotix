@@ -3,7 +3,15 @@ import unittest
 
 from bdmc import CloseLoopController, MotorInfo
 
-from mentabotix import MovingChainComposer, MovingState, MovingTransition, straight_chain, Botix, random_lr_turn_branch
+from mentabotix import (
+    MovingChainComposer,
+    MovingState,
+    MovingTransition,
+    straight_chain,
+    Botix,
+    random_lr_turn_branch,
+    copy,
+)
 from mentabotix.tools.composers import __PLACE_HOLDER__
 
 
@@ -309,6 +317,55 @@ class TestComposer(unittest.TestCase):
         pack = self.moving_chain_composer.export_structure()[1]
         self.assertAlmostEqual(pre_val + dur - lead_time, sum(t.duration for t in pack))
         Botix.export_structure("seq_add_breaker.puml", pack)
+
+        # ----------------
+
+        state_1 = MovingState(100)
+        state_2 = MovingState(200)
+        state_3 = MovingState(300)
+        state_4 = MovingState(400)
+        state_123 = [state_1, state_2, state_3]
+        with self.assertRaises(ValueError):
+            sta, tran = (
+                self.moving_chain_composer.init_container()
+                # .add(MovingState.halt())
+                .concat(
+                    cloned := copy(state_123),
+                    [
+                        MovingTransition(1, to_states=cloned[1], from_states=cloned[0]),
+                        MovingTransition(2, to_states=cloned[2], from_states=[]),
+                        MovingTransition(3, from_states=cloned[2]),
+                    ],
+                ).export_structure()
+            )
+
+        sta, tran = (
+            self.moving_chain_composer.init_container()
+            # .add(MovingState.halt())
+            .concat(
+                cloned := copy(state_123),
+                [
+                    MovingTransition(1, to_states=cloned[1], from_states=cloned[0]),
+                    MovingTransition(2, to_states=cloned[2], from_states=cloned[1]),
+                ],
+            ).export_structure()
+        )
+        Botix.export_structure("test_seq_concat_mode1.puml", tran)
+
+        sta, tran = (
+            self.moving_chain_composer.init_container()
+            # .add(MovingState.halt())
+            .concat(
+                cloned := copy(state_123),
+                [
+                    MovingTransition(1, to_states=cloned[1], from_states=cloned[0]),
+                    MovingTransition(2, to_states=cloned[2], from_states=cloned[1]),
+                    MovingTransition(3, from_states=cloned[2]),
+                ],
+            ).export_structure()
+        )
+
+        Botix.export_structure("test_seq_concat_mode2.puml", tran)
 
 
 if __name__ == "__main__":
