@@ -1393,7 +1393,7 @@ class Botix:
         Raises:
             ValueError: If no matching transition is found and none_check is True, or if multiple matching transitions are found.
         """
-        response = list(filter(lambda trans: state in trans.from_states, self.token_pool))
+        response = list(filter(lambda trans: state in set(trans.from_states), self.token_pool))
         match len(response):
             case 0:
                 if none_check:
