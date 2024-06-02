@@ -3,6 +3,7 @@ import unittest
 from typing import List
 
 from bdmc.modules.controller import CloseLoopController
+from colorama import Fore
 
 from mentabotix import Botix, MovingState, MovingTransition, ArrowStyle
 from mentabotix.modules.exceptions import StructuralError
@@ -448,6 +449,53 @@ class TestBotix(unittest.TestCase):
         )
         self.botix_instance.token_pool = [transition_a_bcd, transition_d_ef]
         self.botix_instance.export_structure("test_isolated.puml", self.botix_instance.token_pool)
+
+    def test_validate_callables_with_callables(self):
+        mock_context = {
+            "callable_function": lambda: True,
+            "non_callable": "I'm not callable",
+            "callable_raising_exception": lambda: (1 / 0),  # 会产生ZeroDivisionError的lambda函数
+            "callable_returning_none": lambda: None,
+        }
+        result = Botix.validate_callables(mock_context)
+        # 检查输出中是否包含正确的可调用对象的行
+        self.assertIn("callable_function", result)
+        self.assertIn(Fore.GREEN, result)  # 校验可调用成功的颜色标记
+
+    def test_validate_callables_with_non_callable(self):
+        mock_context = {
+            "callable_function": lambda: True,
+            "non_callable": "I'm not callable",
+            "callable_raising_exception": lambda: (1 / 0),  # 会产生ZeroDivisionError的lambda函数
+            "callable_returning_none": lambda: None,
+        }
+        result = Botix.validate_callables(mock_context)
+        # 由于non_callable不是可调用对象，因此不应包含在表格中
+        self.assertNotIn("non_callable", result)
+
+    def test_validate_callables_with_exception(self):
+        mock_context = {
+            "callable_function": lambda: True,
+            "non_callable": "I'm not callable",
+            "callable_raising_exception": lambda: (1 / 0),  # 会产生ZeroDivisionError的lambda函数
+            "callable_returning_none": lambda: None,
+        }
+        result = Botix.validate_callables(mock_context)
+        # 检查输出中是否包含异常信息
+        self.assertIn("callable_raising_exception", result)
+        self.assertIn(Fore.RED, result)  # 校验调用失败的颜色标记
+
+    def test_validate_callables_returning_none(self):
+        mock_context = {
+            "callable_function": lambda: True,
+            "non_callable": "I'm not callable",
+            "callable_raising_exception": lambda: (1 / 0),  # 会产生ZeroDivisionError的lambda函数
+            "callable_returning_none": lambda: None,
+        }
+        result = Botix.validate_callables(mock_context)
+        # 检查返回None的可调用对象是否以黄色标记
+        self.assertIn("callable_returning_none", result)
+        self.assertIn(Fore.YELLOW, result)  # 校验返回None的颜色标记
 
 
 if __name__ == "__main__":

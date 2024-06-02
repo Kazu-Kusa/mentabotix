@@ -25,6 +25,7 @@ from typing import (
 )
 
 from bdmc import CloseLoopController
+from colorama import Fore
 from numpy import array, full, int32, equal
 from numpy.random import choice
 from terminaltables import SingleTable
@@ -1795,6 +1796,38 @@ class Botix:
         exec("\n".join(function_lines), context)
         compiled_obj: Callable[[], None] = context.get(function_name)
         return compiled_obj
+
+    @staticmethod
+    def validate_callables(ctx: Context) -> str:
+        """
+        验证上下文中的所有项是否为可调用对象，并返回一个总结表。
+
+        Args:
+            ctx: 包含各种可调用对象的上下文字典
+        Returns:
+            格式化后的表格字符串，展示每个可调用对象的名称及其调用结果
+        """
+        # 初始化表格数据，包含表头
+        table_data = [["Key", "Function Name", "Return Value"]]
+
+        # 遍历上下文中的每个项
+        for key, value in ctx.items():
+            # 检查项是否为可调用对象
+            if callable(value):  # 检查value是否可调用
+                try:
+                    # 调用可调用对象，并获取结果
+                    result = value()  # 尝试调用该函数
+                    # 根据结果是否为None，决定使用的颜色标记
+                    if result is None:
+                        table_data.append([key, value.__name__, f"{Fore.YELLOW}{result}{Fore.RESET}"])
+                        continue
+                    table_data.append([key, value.__name__, f"{Fore.GREEN}{result}{Fore.RESET}"])
+                except Exception as e:  # 捕获调用过程中可能发生的异常
+                    # 如果调用失败，记录异常信息
+                    table_data.append([key, value.__name__, f"{Fore.RED}{e}{Fore.RESET}"])
+
+        # 使用SingleTable类生成并返回格式化的表格字符串
+        return SingleTable(table_data).table
 
 
 if __name__ == "__main__":
