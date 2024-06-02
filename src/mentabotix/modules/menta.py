@@ -14,10 +14,26 @@ from typing import (
     SupportsFloat,
     Dict,
     Any,
+    Set,
 )
 
 from .exceptions import BadSignatureError, RequirementError
 from .logger import _logger
+
+BUILTIN_TYPES: Set[str] = {
+    "int",
+    "float",
+    "str",
+    "bool",
+    "list",
+    "dict",
+    "tuple",
+    "set",
+    "None",
+    "complex",
+    "bytes",
+    "bytearray",
+}
 
 SensorData: TypeAlias = float | int
 # basically, no restrictions, support py objects or ctypes._CData variants
@@ -178,9 +194,13 @@ class Menta:
             RequirementError: 如果返回类型变量名在extra_context中未定义，或者判断源中缺少必要的占位符。
             RuntimeError: 如果遇到了不支持的采样器类型。
         """
-        if return_type_varname and return_type_varname not in extra_context:
+        if (
+            return_type_varname
+            and return_type_varname not in extra_context
+            and return_type_varname not in BUILTIN_TYPES
+        ):
             raise RequirementError(
-                f'The return_type_varname "{return_type_varname}" is not defined in extra_context: {extra_context}.'
+                f'The return_type_varname "{return_type_varname}" is not defined in extra_context: {extra_context} and is not in builtin types: {BUILTIN_TYPES}'
             )
 
         # 将judging_source统一处理为字符串格式
