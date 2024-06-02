@@ -268,6 +268,24 @@ class TestMenta(unittest.TestCase):
         self.assertEqual(func.__name__, function_name)
         print(func())
 
+    def test_func_ret_type(self):
+        from inspect import signature
+
+        sages = [
+            SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+            SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
+            SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
+        ]
+        function_name = "func_a"
+        func = self.menta.construct_inlined_function(
+            usages=sages,
+            judging_source="ret=s0,s1,s2,s3,s4+s5",
+            return_raw=False,
+            return_type=int,
+            function_name=function_name,
+        )
+        self.assertEqual(signature(func).return_annotation, int)
+
     def tearDown(self):
         # 清理可能的副作用
         pass
