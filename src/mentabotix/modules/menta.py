@@ -157,6 +157,7 @@ class Menta:
         extra_context: Dict[str, Any] = None,
         return_type_varname: Optional[str] = None,
         return_raw: bool = False,
+        function_name: str = "_func",
     ) -> Callable[[], Any] | Tuple[str, Dict[str, Any]]:
         """
         构建一个内联函数，根据给定的采样器使用情况、判断源代码和额外上下文信息。
@@ -167,6 +168,7 @@ class Menta:
             extra_context: 一个可选的字典，包含执行判断源代码时需要的额外上下文变量。
             return_type_varname: 一个可选的字符串，指定生成函数的返回类型变量名。如果提供，必须在extra_context中定义。
             return_raw: 一个布尔值，指示是否返回未执行的函数源码和使用的采样器信息。
+            function_name:  一个可选的字符串，指定生成函数的名字。
 
         Returns:
             如果return_raw为True，则返回函数源码和使用的采样器信息的元组；
@@ -244,7 +246,9 @@ class Menta:
         _logger.debug(f"Created temp_var_source: {temp_var_source}")
 
         # 构建完整的函数源码并编译执行
-        function_head: str = f"def _func() -> {return_type_varname}:" if return_type_varname else "def _func():"
+        function_head: str = (
+            f"def {function_name}() -> {return_type_varname}:" if return_type_varname else f"def {function_name}():"
+        )
         func_source = f"{function_head}\n" f" {temp_var_source}\n" f" {judging_source}\n" f" return {RET_IDENTIFIER}"
         _logger.debug(f"Created func_source: {func_source}")
         _logger.debug("Compiling func_source")
@@ -255,7 +259,7 @@ class Menta:
         if return_raw:
             return func_source, compile_context
         exec(func_source, compile_context)  # exec the source with the context
-        func_obj: Callable[[], bool] = compile_context.get("_func")
+        func_obj: Callable[[], bool] = compile_context.get(function_name)
         _logger.debug(f"Succeed, compiled func_obj: {func_obj}")
         return func_obj
 

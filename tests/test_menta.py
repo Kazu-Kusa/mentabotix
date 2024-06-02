@@ -242,6 +242,32 @@ class TestMenta(unittest.TestCase):
         )
         print(func())
 
+    def test_function_name(self):
+        sages = [
+            SamplerUsage(used_sampler_index=0, required_data_indexes=[0, 2]),
+            SamplerUsage(used_sampler_index=1, required_data_indexes=[5]),
+            SamplerUsage(used_sampler_index=2, required_data_indexes=[0, 1, 2]),
+        ]
+        function_name = "func_a"
+        func, _ = self.menta.construct_inlined_function(
+            usages=sages, judging_source="ret=s0,s1,s2,s3,s4+s5", return_raw=True, function_name=function_name
+        )
+
+        self.assertEqual(
+            func,
+            f"""def {function_name}():
+ func_0_temp,func_2_temp=func_0(),func_2()
+ ret=func_0_temp[0],func_0_temp[2],func_1(5),((func_2_temp>>0)&1),((func_2_temp>>1)&1)+((func_2_temp>>2)&1)
+ return ret""",
+        )
+
+        print(func)
+        func = self.menta.construct_inlined_function(
+            usages=sages, judging_source="ret=s0,s1,s2,s3,s4+s5", return_raw=False, function_name=function_name
+        )
+        self.assertEqual(func.__name__, function_name)
+        print(func())
+
     def tearDown(self):
         # 清理可能的副作用
         pass
