@@ -1,39 +1,62 @@
-name: Release EasyCmd
+name: Auto Release on Version Change
+
 on:
   push:
-    tags:
-      - 'v0.*'
-
+    branches:
+      - master
+    paths:
+      - 'pyproject.toml' # 当pyproject.toml文件变动时触发
 
 jobs:
-  publishGitRelease:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
           python-version: '3.11'
 
-      - uses: pdm-project/setup-pdm@v3
-      - name: Install dependencies
+      - name: Install PDM
+        uses: pdm-project/setup-pdm@v3
+
+      - name: Get Project Version
+        id: get_version
+        run: |
+          echo "version=$(pdm show --version)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Create Git Tag
+
+        run: |
+          git tag v${{ steps.get_version.outputs.version }}
+          git push origin v${{ steps.get_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+      - name: Install Dependencies
         run: pdm install
-      - name: Build package
+
+      - name: Build Package
         run: pdm build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          files: dist/*
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish package
         env:
           PDM_PUBLISH_USERNAME: __token__
           PDM_PUBLISH_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: pdm publish
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/*
-          draft: false
-          fail_on_unmatched_files: true
-          generate_release_notes: true
-          prerelease: true
