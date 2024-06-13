@@ -46,12 +46,12 @@ jobs:
         run: pdm install
       - name: Active virtualenv
         run: |
-          pdm venv activate
           eval $(pdm venv activate)
-          which python3
+          ls -al .venv/Scripts/
         shell: bash
       - name: Build artifact
         run: |
+        
           cd docs
           make html
       - name: Upload artifact
