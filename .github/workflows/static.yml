@@ -44,16 +44,15 @@ jobs:
         uses: pdm-project/setup-pdm@v3
       - name: Install dependencies
         run: pdm install
-      - name: Active virtualenv
-        run: |
-          eval $(pdm venv activate)
-          ls -al .venv/Scripts/
-        shell: bash
+
       - name: Build artifact
         run: |
-        
+          eval $(pdm venv activate)
           cd docs
+          
           make html
+        shell: bash
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
