@@ -45,9 +45,9 @@ jobs:
         run: pdm install
       - name: Active virtualenv
         run: |
-          ls
-          sh -c $(pdm venv activate)
-          
+          ls -al
+          .venv/bin/activate
+
       - name: Build artifact
         run: |
           cd docs
