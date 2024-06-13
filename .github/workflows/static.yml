@@ -29,6 +29,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - shell: bash
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +47,6 @@ jobs:
       - name: Active virtualenv
         run: |
           eval $(pdm venv activate)
-        shell: bash
       - name: Build artifact
         run: |
           cd docs
