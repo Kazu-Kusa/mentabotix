@@ -30,6 +30,8 @@ dev = [
     "pytest>=8.1.1",
     "matplotlib>=3.8.4",
     "pandas>=2.2.2",
+    "sphinx>=7.3.7",
+    "sphinx-rtd-theme>=2.0.0",
 ]
 
 
