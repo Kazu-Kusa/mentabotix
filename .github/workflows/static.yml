@@ -61,7 +61,6 @@ jobs:
         with:
           # Upload entire repository
           path: 'build/html'
-        shell: bash
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
