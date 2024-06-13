@@ -51,8 +51,8 @@ jobs:
           cd docs
           
           make html
-          pwd
-          ls -al
+          cd build/html
+
         shell: bash
 
       - name: Upload artifact
