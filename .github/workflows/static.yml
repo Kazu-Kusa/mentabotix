@@ -52,13 +52,12 @@ jobs:
           
           make html
           pwd
+          ls -al
         shell: bash
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
-        run: |
-          ls -al
-          pwd
+
         with:
           # Upload entire repository
           path: 'build/html'
