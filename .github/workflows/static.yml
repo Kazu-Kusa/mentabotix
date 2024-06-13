@@ -51,13 +51,18 @@ jobs:
           cd docs
           
           make html
+          pwd
         shell: bash
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
+        run: |
+          ls -al
+          pwd
         with:
           # Upload entire repository
           path: 'build/html'
+        shell: bash
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
