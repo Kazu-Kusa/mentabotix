@@ -48,6 +48,7 @@ jobs:
         run: |
           pdm venv activate
           eval $(pdm venv activate)
+          which python3
         shell: bash
       - name: Build artifact
         run: |
