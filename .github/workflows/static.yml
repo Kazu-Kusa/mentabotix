@@ -51,8 +51,7 @@ jobs:
           cd docs
           
           make html
-          cd build/html
-          ls -al
+
         shell: bash
 
       - name: Upload artifact
@@ -60,7 +59,7 @@ jobs:
 
         with:
           # Upload entire repository
-          path: '.'
+          path: 'docs/build/html'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
