@@ -38,3 +38,8 @@ jobs:
       - name: Build package
         run: pdm build
 
+      - name: try to import package
+        run: |
+          eval $(pdm venv activate)
+          python -c "import mentabotix"
+        shell: bash
