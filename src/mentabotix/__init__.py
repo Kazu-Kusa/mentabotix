@@ -12,7 +12,7 @@ from .tools.composers import (
     random_lr_turn_branch,
     copy,
 )
-from .tools.generators import NameGenerator, Multipliers, make_multiplier_generator
+from .tools.generators import NameGenerator
 from .tools.selectors import make_weighted_selector
 
 __all__ = [
@@ -46,7 +46,6 @@ __all__ = [
     "copy",
     # tools/generators
     "NameGenerator",
-    "Multipliers",
     # tools/selectors
     "make_weighted_selector",
 ]
