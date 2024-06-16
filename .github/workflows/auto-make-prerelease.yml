@@ -36,30 +36,44 @@ jobs:
           git fetch --tags
           if git rev-list -n 1 "v$VERSION" > /dev/null 2>&1; then
             echo "Tag v$VERSION already exists."
-            echo "exists='true'" >> $GITHUB_OUTPUT
+            echo "exists=1" >> $GITHUB_OUTPUT
 
           else
             echo "Tag v$VERSION does not exist."
-            echo "exists='false'" >> $GITHUB_OUTPUT
+            echo "exists=0" >> $GITHUB_OUTPUT
 
           fi
         shell: bash
 
       - name: Create Git Tag
-        if: steps.check_tag_exists.outputs.exists == 'false'
+        if: steps.check_tag_exists.outputs.exists == 0
         run: |
           git tag v${{ steps.get_version.outputs.version }}
           git push origin v${{ steps.get_version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+
       - name: Install Dependencies
         run: pdm install
+        shell: bash
+
 
       - name: Build Package
         run: pdm build
+        shell: bash
+
+      - name: Publish package
+        if: steps.check_tag_exists.outputs.exists == 0
+
+        env:
+          PDM_PUBLISH_USERNAME: __token__
+          PDM_PUBLISH_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: pdm publish
+        shell: bash
 
       - name: Create GitHub Release
-        if: steps.check_tag_exists.outputs.exists == 'false'
+        if: steps.check_tag_exists.outputs.exists == 0
 
         uses: softprops/action-gh-release@v1
         with:
@@ -72,10 +86,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish package
-        if: steps.check_tag_exists.outputs.exists == 'false'
-
-        env:
-          PDM_PUBLISH_USERNAME: __token__
-          PDM_PUBLISH_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: pdm publish
