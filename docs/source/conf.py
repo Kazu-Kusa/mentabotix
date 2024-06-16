@@ -7,7 +7,6 @@ from pathlib import Path
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
 project = "mentabotix"
 copyright = "2024, Whth"
 author = "Whth"
@@ -16,16 +15,22 @@ release = "0.1.5.19"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
-    "sphinx.ext.doctest",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.todo",
-    "sphinx.ext.coverage",
-    "sphinx.ext.mathjax",
-    "sphinx.ext.githubpages",
-]
+extensions = list(
+    {
+        "sphinx.ext.autodoc",
+        "sphinx.ext.autosectionlabel",
+        "sphinx.ext.autosummary",
+        "sphinx.ext.duration",
+        "sphinx.ext.extlinks",
+        "sphinx.ext.napoleon",
+        "sphinx.ext.doctest",
+        "sphinx.ext.todo",
+        "sphinx.ext.coverage",
+        "sphinx.ext.mathjax",
+        "sphinx.ext.githubpages",
+        "sphinx.ext.viewcode",
+    }
+)
 templates_path = ["_templates"]
 exclude_patterns = []
 
@@ -35,4 +40,5 @@ exclude_patterns = []
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-sys.path.insert(0, (Path(__file__).parent.parent.parent / "src").absolute().as_posix())
+root = Path(__file__).parent.parent.parent
+sys.path.extend([(root / "src").absolute().as_posix(), (root / "tests").absolute().as_posix()])

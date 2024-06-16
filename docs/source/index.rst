@@ -1,14 +1,16 @@
-.. mentabotix documentation master file, created by
-   sphinx-quickstart on Thu Jun 13 17:31:46 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Welcome to mentabotix's documentation!
 ======================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 4
+
+   installation
+   quickstart
+   tutorials
+   user_guide
+   troubleshooting
+   api
+
 
 
 
@@ -18,3 +20,10 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+* :ref:`installation`
+* :ref:`user_guide`
+* :ref:`api`
+* :ref:`tutorials`
+* :ref:`troubleshooting`
