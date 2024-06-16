@@ -5,7 +5,7 @@
 groups = ["default", "dev", "matplotlib"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:dc466f621a92b80cc009a04229e5f0d71f8a66b9057bf18be8de5c84472668ce"
+content_hash = "sha256:512da965c93132ec0f7255284306dd1e22d2bfa34f02e887caabfd01ff871c1a"
 
 [[package]]
 name = "alabaster"
@@ -609,21 +609,6 @@ groups = ["dev"]
 files = [
     {file = "pytz-2024.1-py2.py3-none-any.whl", hash = "sha256:328171f4e3623139da4983451950b28e95ac706e13f3f2630a879749e7a8b319"},
     {file = "pytz-2024.1.tar.gz", hash = "sha256:2a29735ea9c18baf14b448846bde5a48030ed267578472d8955cd0e7443a9812"},
-]
-
-[[package]]
-name = "pyuptech"
-version = "0.1.6.4"
-requires_python = ">=3.11"
-summary = "A Python wrapper for the uptech binary lib"
-groups = ["default"]
-dependencies = [
-    "coloredlogs>=15.0.1",
-    "terminaltables>=3.1.10",
-]
-files = [
-    {file = "pyuptech-0.1.6.4-py3-none-any.whl", hash = "sha256:e30641bc703afb1680fe9494c973033eabf015fcc5e632f457af6f2d6d5f4651"},
-    {file = "pyuptech-0.1.6.4.tar.gz", hash = "sha256:2bb60a5ca65b6f683d0ca579568d87a7e90aa078b805ec46ba64a3a0d31917b6"},
 ]
 
 [[package]]
