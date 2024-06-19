@@ -26,11 +26,11 @@ from typing import (
 
 from bdmc import CloseLoopController
 from colorama import Fore
+from mentabotix.tools.selectors import make_weighted_selector
 from numpy import array, full, int32, equal
 from numpy.random import choice
 from terminaltables import SingleTable
 
-from mentabotix.tools.selectors import make_weighted_selector
 from .exceptions import StructuralError, TokenizeError
 from .logger import _logger
 from ..tools.generators import NameGenerator
@@ -200,22 +200,22 @@ class MovingState:
         return self._identifier
 
     @property
-    def before_entering(self) -> Optional[List[Callable[[], None]]]:
+    def before_entering(self) -> Optional[List[Callable[[], None | Any]]]:
         """
         Returns the list of functions to be called before entering the state.
 
         :return: An optional list of callables that take no arguments and return None.
-        :rtype: Optional[List[Callable[[], None]]]
+        :rtype: Optional[List[Callable[[], None|Any]]]
         """
         return self._before_entering
 
     @property
-    def after_exiting(self) -> Optional[List[Callable[[], None]]]:
+    def after_exiting(self) -> Optional[List[Callable[[], None | Any]]]:
         """
         Returns the list of functions to be called after exiting the state.
 
         :return: An optional list of callables that take no arguments and return None.
-        :rtype: Optional[List[Callable[[], None]]]
+        :rtype: Optional[List[Callable[[], None|Any]]]
         """
         return self._after_exiting
 
@@ -244,8 +244,8 @@ class MovingState:
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
         speed_expressions: Optional[FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
         used_context_variables: Optional[List[str]] = None,
-        before_entering: Optional[List[Callable[[], None]]] = None,
-        after_exiting: Optional[List[Callable[[], None]]] = None,
+        before_entering: Optional[List[Callable[[], None | Any]]] = None,
+        after_exiting: Optional[List[Callable[[], None] | Any]] = None,
     ) -> None:
         """
         Initialize the MovingState with speeds.
@@ -260,8 +260,8 @@ class MovingState:
         Keyword Args:
             speed_expressions (Optional[FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]]): The speed expressions of the wheels.
             used_context_variables (Optional[List[str]]): The set of context variable names used in the speed expressions.
-            before_entering (Optional[List[Callable[[], None]]]): The list of functions to be called before entering the state.
-            after_exiting (Optional[List[Callable[[], None]]]): The list of functions to be called after exiting the state.
+            before_entering (Optional[List[Callable[[], None|Any]]]): The list of functions to be called before entering the state.
+            after_exiting (Optional[List[Callable[[], None|Any]]]]): The list of functions to be called after exiting the state.
         Raises:
             ValueError: If the provided speeds do not match any of the above patterns.
         """
@@ -332,8 +332,8 @@ class MovingState:
         if used_context_variables:
             self._validate_used_context_variables(used_context_variables, self._speed_expressions)
         self._used_context_variables: List[str] = used_context_variables or []
-        self._before_entering: List[Callable[[], None]] = before_entering or []
-        self._after_exiting: List[Callable[[], None]] = after_exiting or []
+        self._before_entering: List[Callable[[], None | Any]] = before_entering or []
+        self._after_exiting: List[Callable[[], None | Any]] = after_exiting or []
         self._identifier: int = MovingState.__state_id_counter__
         MovingState.__state_id_counter__ += 1
 
