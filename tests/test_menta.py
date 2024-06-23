@@ -230,7 +230,7 @@ class TestMenta(unittest.TestCase):
 
         self.assertEqual(
             func,
-            """def _func():
+            """def _menta_func():
  func_0_temp,func_2_temp=func_0(),func_2()
  ret=func_0_temp[0],func_0_temp[2],func_1(5),((func_2_temp>>0)&1),((func_2_temp>>1)&1)+((func_2_temp>>2)&1)
  return ret""",

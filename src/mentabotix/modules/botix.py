@@ -26,7 +26,6 @@ from typing import (
 
 from bdmc import CloseLoopController
 from colorama import Fore
-from mentabotix.tools.selectors import make_weighted_selector
 from numpy import array, full, int32, equal
 from numpy.random import choice
 from terminaltables import SingleTable
@@ -34,6 +33,7 @@ from terminaltables import SingleTable
 from .exceptions import StructuralError, TokenizeError
 from .logger import _logger
 from ..tools.generators import NameGenerator
+from ..tools.selectors import make_weighted_selector
 
 T_EXPR = TypeVar("T_EXPR", str, list)
 Expression: TypeAlias = str | int
@@ -175,7 +175,6 @@ class MovingState:
 
         track_width: int = 100
         diagonal_multiplier: float = 1.53
-        # TODO: remove the dimensionless feature
 
     __state_id_counter__: ClassVar[int] = 0
 
@@ -1183,7 +1182,6 @@ class Botix:
         Note:
             The structure validity of the token pool does not affect the accessibility check,
             So, if the token pool is not structurally valid, this method will still complete the check.
-            FIXME: This should be fixed in the future.
         """
         # Initialize a queue for BFS and a set to keep track of states not accessible from the start state
         search_queue: List[MovingState] = [start_state]
@@ -1437,7 +1435,7 @@ class Botix:
             case _:
                 return response
 
-    def _check_met_requirements(self):
+    def _validate_token_pool(self):
         self.ensure_structure_validity(self.token_pool)
         start_state = self.acquire_unique_start(self.token_pool)
         end_states = self.acquire_end_states(self.token_pool)
@@ -1755,12 +1753,15 @@ class Botix:
             description = state_cmds_expr
         lines.insert(1, f"{state_alias}: {description}\n")
 
-    def compile(self, return_median: bool = False) -> Callable[[], None] | Tuple[List[str], Context]:
+    def compile(
+        self, return_median: bool = False, function_name: str = "_botix_func"
+    ) -> Callable[[], None] | Tuple[List[str], Context]:
         """
         Compiles the bot's code and returns a callable function or a tuple of compiled lines and context.
 
         Args:
             return_median (bool, optional): Whether to return the compiled lines and context instead of a callable function. Defaults to False.
+            function_name (str, optional): The name of the function to be created. Defaults to "_func".
 
         Returns:
             Callable[[], None] | Tuple[List[str], Context]: The compiled function or a tuple of compiled lines and context.
@@ -1778,8 +1779,7 @@ class Botix:
             If `return_median` is True, it returns the compiled lines and context as a tuple. Otherwise, it executes the compiled lines using the `exec` function and retrieves the compiled function from the context dictionary. The compiled function is then returned.
         """
 
-        self._check_met_requirements()
-        function_name = "_func"
+        self._validate_token_pool()
         function_head = f"def {function_name}():"
         controller_name = "con"
         context: Context = {controller_name: self.controller}

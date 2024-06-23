@@ -5,13 +5,21 @@ T = TypeVar("T")
 
 def make_weighted_selector(pool: Sequence[T], weights: Sequence[float | int]) -> Callable[[], T]:
     """
+    Creates a weighted selector that randomly selects an element from a given pool based on the provided weights.
 
     Args:
-        pool:
-        weights:
+        pool (Sequence[T]): A sequence of elements from which to select.
+        weights (Sequence[float | int]): A sequence of weights corresponding to each element in the pool.
 
     Returns:
+        Callable[[], T]: A callable that returns a randomly selected element from the pool.
 
+    Example:
+        >>> pool = ['apple', 'banana', 'orange']
+        >>> weights = [0.3, 0.5, 0.2]
+        >>> selector = make_weighted_selector(pool, weights)
+        >>> selector()
+        'banana'
     """
     from random import uniform
 

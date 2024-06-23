@@ -174,26 +174,25 @@ class Menta:
         extra_context: Dict[str, Any] = None,
         return_type: Optional[Type] = None,
         return_raw: bool = False,
-        function_name: str = "_func",
+        function_name: str = "_menta_func",
     ) -> Callable[[], Any] | Tuple[str, Dict[str, Any]]:
         """
-        构建一个内联函数，根据给定的采样器使用情况、判断源代码和额外上下文信息。
+        Constructs an inlined function based on the provided usages, judging_source, and extra_context.
 
-        Args:
-            usages: 一个SamplerUsage对象列表，描述了如何使用采样器。
-            judging_source: 判断源代码，可以是单个SourceCode对象或其列表。这些代码将被嵌入到生成的函数中。
-            extra_context: 一个可选的字典，包含执行判断源代码时需要的额外上下文变量。
-            return_type_varname: 一个可选的字符串，指定生成函数的返回类型变量名。如果提供，必须在extra_context中定义。
-            return_raw: 一个布尔值，指示是否返回未执行的函数源码和使用的采样器信息。
-            function_name:  一个可选的字符串，指定生成函数的名字。
+        Parameters:
+            usages (List[SamplerUsage]): List of SamplerUsage objects.
+            judging_source (List[SourceCode] | SourceCode): Source code for judging.
+            extra_context (Dict[str, Any], optional): Additional context information. Defaults to None.
+            return_type (Optional[Type], optional): Return type of the function. Defaults to None.
+            return_raw (bool, optional): Whether to return the raw function source code. Defaults to False.
+            function_name (str, optional): Name of the function. Defaults to "_func".
 
         Returns:
-            如果return_raw为True，则返回函数源码和使用的采样器信息的元组；
-            否则，返回一个可调用对象，该对象在执行时根据判断源代码和提供的采样器数据返回结果。
+            Callable[[], Any] | Tuple[str, Dict[str, Any]]: Constructed inlined function.
 
         Raises:
-            RequirementError: 如果返回类型变量名在extra_context中未定义，或者判断源中缺少必要的占位符。
-            RuntimeError: 如果遇到了不支持的采样器类型。
+            ValueError: If the number of sampler usages does not match the number of samplers.
+            RuntimeError: If an unsupported sampler type is encountered.
         """
 
         # 将judging_source统一处理为字符串格式

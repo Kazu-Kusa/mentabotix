@@ -141,7 +141,7 @@ class MovingChainComposer:
 
         This function checks the validity of the input and connects the states and transitions accordingly.
         It handles different scenarios based on whether there's an initial state and the difference between the lengths of states and transitions.
-        """  # FIXME
+        """
         state_len, trans_len = len(states), len(transitions)
         # Check if at least one state and one transition are provided
         if not (states or transitions):

@@ -233,7 +233,7 @@ class TestBotix(unittest.TestCase):
         self.assertEqual(
             self.botix_instance.compile(True)[0],
             [
-                "def _func():",
+                "def _botix_func():",
                 "    con.set_motors_speed((-1, -1, -1, -1)).delay(0.1).set_motors_speed((0, 0, 0, 0)).delay(1).set_motors_speed((1, 1, 1, 1)).delay(2).set_motors_speed((2, 2, 2, 2))",
             ],
         )
@@ -272,7 +272,7 @@ class TestBotix(unittest.TestCase):
         compiled = self.botix_instance.compile(True)
         self.assertEqual(
             [
-                "def _func():",
+                "def _botix_func():",
                 "    match con.set_motors_speed((100, 100, 100, 100)).delay_b_match(1,transition0_breaker_1,0.01):",
                 "        case 1:",
                 "            con.set_motors_speed((200, 200, 200, 200))",
