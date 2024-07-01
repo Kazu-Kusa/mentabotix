@@ -699,7 +699,10 @@ class MovingState:
         """
         Return the speeds of the MovingState object.
         """
-        return tuple(self._speeds)
+        if self._speeds is None:
+            raise "The Speeds is not defined! You can not unwrap!"
+
+        return tuple(self._speeds.tolist())
 
     def clone(self) -> Self:
         """
@@ -711,9 +714,7 @@ class MovingState:
         if self._speeds is not None:
 
             return MovingState(
-                *tuple(self._speeds.tolist()),
-                speed_expressions=self._speed_expressions,
-                used_context_variables=list(self._used_context_variables),
+                *self.unwrap(),
                 before_entering=list(self._before_entering),
                 after_exiting=list(self._after_exiting),
             )
@@ -744,7 +745,7 @@ class MovingState:
 
         if self._speeds is not None and self._speed_expressions:
             raise TokenizeError(
-                f"Cannot tokenize a state with both speed expressions and speeds, got {self._speeds} and {self._speed_expressions}."
+                f"Cannot tokenize a state with both speed expressions and speeds, got {self.unwrap()} and {self._speed_expressions}."
             )
         elif self._speeds is None and self._speed_expressions is None:
             raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds.")
@@ -840,8 +841,8 @@ class MovingState:
                         raise TokenizeError(f"Unknown expression type, got {self._pattern_type}")
                 state_tokens.append(f".set_motors_speed({input_arg_string})")
 
-            case None, speeds:
-                state_tokens.append(f".set_motors_speed({tuple(speeds)})")
+            case None, speeds if speeds is not None:
+                state_tokens.append(f".set_motors_speed({self.unwrap()})")
             case _:
                 raise TokenizeError("should never reach here")
 
@@ -870,7 +871,7 @@ class MovingState:
             return all(equal(self._speeds, other._speeds)) and self._speed_expressions == other._speed_expressions
 
     def __str__(self):
-        main_seq = self._speed_expressions if self._speeds is None else tuple(self._speeds)
+        main_seq = self._speed_expressions if self._speeds is None else self.unwrap()
         if all(main_seq[0] == x for x in main_seq[1:]):
             return f"{self._identifier}-MovingState({repr(main_seq[0])})"
         if main_seq[0] == main_seq[1] != main_seq[-1] == main_seq[-2]:
