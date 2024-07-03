@@ -174,7 +174,7 @@ class TestMovingState(unittest.TestCase):
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
         state = MovingState.rand_dir_turn(con, 500)
         print(state)
         end = MovingState(0)
@@ -184,15 +184,14 @@ class TestMovingState(unittest.TestCase):
 
         fun = b.compile()
         fun()
-        con.stop_msg_sending()
-        con.serial_client.close()
+        con.close()
 
     def test_random_turn_spd_no_weights(self):
         from mentabotix import MovingTransition, Botix
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
         state = MovingState.rand_spd_turn(
             con,
             "l",
@@ -208,15 +207,14 @@ class TestMovingState(unittest.TestCase):
         for _ in range(2):
             fun()
             sleep(0.2)
-        con.stop_msg_sending()
-        con.serial_client.close()
+        con.close()
 
     def test_random_turn_spd_with_weights(self):
         from mentabotix import MovingTransition, Botix
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
         state = MovingState.rand_spd_turn(con, "l", [500, 600, 700], weights=[10, 80, 10])
         print(state)
         end = MovingState(0)
@@ -228,15 +226,15 @@ class TestMovingState(unittest.TestCase):
         for _ in range(2):
             fun()
             sleep(0.2)
-        con.stop_msg_sending()
-        con.serial_client.close()
+
+        con.close()
 
     def test_rand_turn_spd_dir_with_weights(self):
         from mentabotix import MovingTransition, Botix
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
         state = MovingState.rand_dir_spd_turn(con, [500, 600, -700], weights=[10, 80, 10])
         print(state)
         end = MovingState(0)
@@ -248,15 +246,14 @@ class TestMovingState(unittest.TestCase):
         for _ in range(2):
             fun()
             sleep(0.2)
-        con.stop_msg_sending()
-        con.serial_client.close()
+        con.close()
 
     def test_rand_spd_straight_with_weights(self):
         from mentabotix import MovingTransition, Botix
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
         state = MovingState.rand_spd_straight(con, [500, 600, 700], weights=[10, 80, 10])
         print(state)
         end = MovingState(0)
@@ -268,15 +265,14 @@ class TestMovingState(unittest.TestCase):
         for _ in range(2):
             fun()
             sleep(0.2)
-        con.stop_msg_sending()
-        con.serial_client.close()
+        con.close()
 
     def test_rand_move_with_weights(self):
         from mentabotix import MovingTransition, Botix
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
         with self.assertRaises(ValueError):
             state = MovingState.rand_move(
                 con, [(500, 600, 700, 1100), (8000, 7000, 6000, 5000)], weights=[10, 80, 10, 10]
@@ -298,8 +294,7 @@ class TestMovingState(unittest.TestCase):
         fun_2 = b.compile()
         for _ in range(10):
             fun_2()
-        con.stop_msg_sending()
-        con.serial_client.close()
+        con.close()
 
 
 if __name__ == "__main__":

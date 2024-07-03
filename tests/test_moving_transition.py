@@ -152,7 +152,7 @@ class TestMovingTransition(unittest.TestCase):
 
         con = CloseLoopController(
             [MotorInfo(1), MotorInfo(2), MotorInfo(3), MotorInfo(4)], port="COM10", context={"var1": 10, "var2": 20}
-        ).start_msg_sending()
+        )
 
         def breaker() -> int:
             return random.randint(0, 2)

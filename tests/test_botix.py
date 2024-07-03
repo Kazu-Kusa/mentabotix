@@ -23,9 +23,12 @@ class TestBotix(unittest.TestCase):
         self.transition_bc = MovingTransition(duration=2, from_states=[self.state_b], to_states=self.state_c)
 
         # 初始化一个Botix实例用于测试
-        self.controller_mock = CloseLoopController()
+        self.controller_mock = CloseLoopController(port="COM10")
         self.token_pool = [self.transition_start_a, self.transition_ab, self.transition_bc]
         self.botix_instance = Botix(controller=self.controller_mock, token_pool=self.token_pool)
+
+    def tearDown(self):
+        self.controller_mock.close()
 
     def test_get_start(self):
         self.assertEqual(self.start_state, self.botix_instance.acquire_unique_start(self.botix_instance.token_pool))
