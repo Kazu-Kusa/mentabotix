@@ -60,11 +60,11 @@ class TestMenta(unittest.TestCase):
             self.assertIsInstance(data, int | float)
 
     def test_construct_updater_single_idx_sampler(self):
-        usage = SamplerUsage(used_sampler_index=1, required_data_indexes=[0])
+        usage = SamplerUsage(used_sampler_index=1, required_data_indexes=[0, 3])
         updater = self.menta.construct_updater([usage])
         result = updater()
-        self.assertIsInstance(result, int)
-        self.assertEqual(result, 0)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(result, (0, 30))
 
     def test_construct_updater_single_drc_sampler(self):
         usage = SamplerUsage(used_sampler_index=2, required_data_indexes=[])

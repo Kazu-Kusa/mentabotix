@@ -249,13 +249,16 @@ class Menta:
             _logger.debug(f'Replacing "{placebo}" with "{expr}".')
             judging_source = judging_source.replace(placebo, expr)
 
-        # 创建临时变量的源代码，用于在执行环境中存储采样器的返回值
-        temp_var_source: str = (
-            ",".join(sampler_temp_var_names_mapping.keys())
-            + "="
-            + ",".join([f"{fname}()" for fname in sampler_temp_var_names_mapping.values()])
-        )
-        _logger.debug(f"Created temp_var_source: {temp_var_source}")
+        if sampler_temp_var_names_mapping:
+            # 创建临时变量的源代码，用于在执行环境中存储采样器的返回值
+            temp_var_source: str = (
+                ",".join(sampler_temp_var_names_mapping.keys())
+                + "="
+                + ",".join([f"{fname}()" for fname in sampler_temp_var_names_mapping.values()])
+            )
+            _logger.debug(f"Created temp_var_source: {temp_var_source}")
+        else:
+            temp_var_source = ""
 
         if return_type:
 
