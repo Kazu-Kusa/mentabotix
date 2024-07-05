@@ -108,7 +108,7 @@ class MovingChainComposer:
             raise ValueError(f"Need {self.next_need}, got {type(unit)}, which is {repr(unit)}!")
         elif unit_type == MovingState:
             self._chain_container[MovingState].append(unit)
-            if self.last_transition and unit not in self.last_transition.to_states.values():
+            if self.last_transition and unit not in set(self.last_transition.to_states.values()):
                 self.last_transition.to_states[register_case] = unit
         elif unit_type == MovingTransition:
             unit.from_states.append(self.last_state) if self.last_state not in unit.from_states else None
