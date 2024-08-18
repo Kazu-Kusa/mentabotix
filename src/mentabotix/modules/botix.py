@@ -808,64 +808,33 @@ class MovingState:
                 getter_function_name_generator = NameGenerator(f"state{self._identifier}_context_getter_")
                 getter_temp_name_generator = NameGenerator(f"state{self._identifier}_context_getter_temp_")
                 expression_final_value_temp = NameGenerator(f"state{self._identifier}_val_tmp")
-                input_arg_string: str = str(tuple(expression)).replace("'", "")
 
                 match self._pattern_type:
                     case PatternType.Full:
                         expression: Tuple[str, str, str, str]
-                        val_temp_name: str = expression_final_value_temp()
-                        full_expression = expression[0]
-                        for varname in self._used_context_variables:
-                            # Create context retrieval functions using expressions
-                            fn: Callable[[], Any] = con.register_context_getter(varname)
-                            context[getter_func_var_name := getter_function_name_generator()] = fn
-                            full_expression = self._replace_var(
-                                full_expression, varname, getter_func_var_name, getter_temp_name_generator()
-                            )
-
-                        input_arg_string = (
-                            f"({val_temp_name}:=({full_expression}),{val_temp_name},{val_temp_name},{val_temp_name})"
+                        input_arg_string = self._make_arg_string_full_pattern(
+                            con,
+                            context,
+                            expression,
+                            expression_final_value_temp,
+                            getter_function_name_generator,
+                            getter_temp_name_generator,
                         )
                     case PatternType.LR:
                         expression: IndividualExpressionPattern
-                        l_val_temp_name: str = expression_final_value_temp()
-                        r_val_temp_name: str = expression_final_value_temp()
-                        lr_expression: str = f"{expression[0]}{__MAGIC_SPLIT_CHAR__}{expression[-1]}"
-                        for varname in self._used_context_variables:
-                            # Create context retrieval functions using expressions
-                            fn: Callable[[], Any] = con.register_context_getter(varname)
-                            context[getter_func_var_name := getter_function_name_generator()] = fn
-                            lr_expression = self._replace_var(
-                                lr_expression, varname, getter_func_var_name, getter_temp_name_generator()
-                            )
-                        left_expression, right_expression = lr_expression.split(__MAGIC_SPLIT_CHAR__)
-
-                        match isinstance(expression[0], int), isinstance(expression[-1], int):
-                            case True, True:
-                                raise TokenizeError(f"Should never be here!")
-                            case False, False:
-
-                                input_arg_string = f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
-                            case False, True:
-                                input_arg_string = f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{right_expression},{right_expression})"
-                            case True, False:
-                                input_arg_string = f"({left_expression},{left_expression},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
+                        input_arg_string = self._make_arg_string_lr_pattern(
+                            con,
+                            context,
+                            expression,
+                            expression_final_value_temp,
+                            getter_function_name_generator,
+                            getter_temp_name_generator,
+                        )
 
                     case PatternType.Individual:
-                        for varname in self._used_context_variables:
-
-                            # Create context retrieval functions using expressions
-                            fn: Callable[[], Any] = con.register_context_getter(varname)
-                            context[(getter_func_var_name := getter_function_name_generator())] = fn
-                            temp_name = getter_temp_name_generator()
-
-                            if input_arg_string.count(varname) == 1:
-                                input_arg_string = input_arg_string.replace(varname, f"{getter_func_var_name}()", 1)
-                            else:
-                                input_arg_string = input_arg_string.replace(
-                                    varname, f"({temp_name}:={getter_func_var_name}())", 1
-                                )
-                                input_arg_string = input_arg_string.replace(varname, temp_name)
+                        input_arg_string = self._make_arg_string_single_pattern(
+                            con, context, expression, getter_function_name_generator, getter_temp_name_generator
+                        )
                     case _:
                         raise TokenizeError(f"Unknown expression type, got {self._pattern_type}")
                 state_tokens.append(f".set_motors_speed({input_arg_string})")
@@ -877,6 +846,100 @@ class MovingState:
 
         tokens: List[str] = before_enter_tokens + state_tokens + after_exiting_tokens
         return tokens, context
+
+    def _make_arg_string_single_pattern(
+        self,
+        con: CloseLoopController,
+        context: Context,
+        expression: IndividualExpressionPattern,
+        getter_function_name_generator: NameGenerator,
+        getter_temp_name_generator: NameGenerator,
+    ) -> str:
+        """
+
+        Args:
+            con:
+            context:
+            expression:
+            getter_function_name_generator:
+            getter_temp_name_generator:
+
+        Returns:
+
+        """
+        input_arg_string: str = str(tuple(expression)).replace("'", "")
+        for varname in self._used_context_variables:
+
+            # Create context retrieval functions using expressions
+            fn: Callable[[], Any] = con.register_context_getter(varname)
+            context[(getter_func_var_name := getter_function_name_generator())] = fn
+            temp_name = getter_temp_name_generator()
+
+            if input_arg_string.count(varname) == 1:
+                input_arg_string = input_arg_string.replace(varname, f"{getter_func_var_name}()", 1)
+            else:
+                input_arg_string = input_arg_string.replace(varname, f"({temp_name}:={getter_func_var_name}())", 1)
+                input_arg_string = input_arg_string.replace(varname, temp_name)
+        return input_arg_string
+
+    def _make_arg_string_lr_pattern(
+        self,
+        con: CloseLoopController,
+        context: Context,
+        expression: IndividualExpressionPattern,
+        expression_final_value_temp: NameGenerator,
+        getter_function_name_generator: NameGenerator,
+        getter_temp_name_generator: NameGenerator,
+    ) -> str:
+        l_val_temp_name: str = expression_final_value_temp()
+        r_val_temp_name: str = expression_final_value_temp()
+        lr_expression: str = f"{expression[0]}{__MAGIC_SPLIT_CHAR__}{expression[-1]}"
+        for varname in self._used_context_variables:
+            # Create context retrieval functions using expressions
+            fn: Callable[[], Any] = con.register_context_getter(varname)
+            context[getter_func_var_name := getter_function_name_generator()] = fn
+            lr_expression = self._replace_var(
+                lr_expression, varname, getter_func_var_name, getter_temp_name_generator()
+            )
+        left_expression, right_expression = lr_expression.split(__MAGIC_SPLIT_CHAR__)
+        match isinstance(expression[0], int), isinstance(expression[-1], int):
+            case True, True:
+                raise TokenizeError(f"Should never be here!")
+            case False, False:
+
+                input_arg_string = f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
+            case False, True:
+                input_arg_string = (
+                    f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{right_expression},{right_expression})"
+                )
+            case True, False:
+                input_arg_string = (
+                    f"({left_expression},{left_expression},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
+                )
+            case _:
+                raise RuntimeError("Should never arrive here!")
+        return input_arg_string
+
+    def _make_arg_string_full_pattern(
+        self,
+        con: CloseLoopController,
+        context: Context,
+        expression: Tuple[str, str, str, str],
+        expression_final_value_temp: NameGenerator,
+        getter_function_name_generator: NameGenerator,
+        getter_temp_name_generator: NameGenerator,
+    ) -> str:
+        val_temp_name: str = expression_final_value_temp()
+        full_expression = expression[0]
+        for varname in self._used_context_variables:
+            # Create context retrieval functions using expressions
+            fn: Callable[[], Any] = con.register_context_getter(varname)
+            context[getter_func_var_name := getter_function_name_generator()] = fn
+            full_expression = self._replace_var(
+                full_expression, varname, getter_func_var_name, getter_temp_name_generator()
+            )
+        input_arg_string = f"({val_temp_name}:=({full_expression}),{val_temp_name},{val_temp_name},{val_temp_name})"
+        return input_arg_string
 
     @staticmethod
     def _replace_var(source: str, var_name: str, func_name: str, temp_name: str) -> str:
@@ -922,6 +985,7 @@ class MovingTransition:
 
     @property
     def identifier(self) -> int:
+        """The unique identifier of the transition."""
         return self._transition_id
 
     def __init__(
