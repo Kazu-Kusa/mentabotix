@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from itertools import zip_longest, chain
+from pathlib import Path
 from queue import Queue
 from random import random
 from typing import (
@@ -75,6 +76,32 @@ class ArrowStyle(StrEnum):
     LEFT = "-left->"
     RIGHT = "-right->"
     UP = "-up->"
+
+    @classmethod
+    def new(cls, direction: "ArrowStyle" | Literal["up", "down", "left", "right"] = "down") -> Self:
+        """
+        Create a new ArrowStyle object.
+        Args:
+            direction:
+
+        Returns:
+
+        """
+
+        if isinstance(direction, cls):
+            return direction
+
+        match direction:
+            case "up":
+                return cls.UP
+            case "down":
+                return cls.DOWN
+            case "left":
+                return cls.LEFT
+            case "right":
+                return cls.RIGHT
+            case _:
+                raise ValueError(f"Must be one of {list(cls)}, but got unknown arrow style: {direction}")
 
 
 def get_function_annotations(func: Callable) -> str:
@@ -199,7 +226,7 @@ class MovingState:
         return self._identifier
 
     @property
-    def before_entering(self) -> Optional[List[Callable[[], None | Any]]]:
+    def before_entering(self) -> Optional[List[Callable[[], Any]]]:
         """
         Returns the list of functions to be called before entering the state.
 
@@ -209,7 +236,7 @@ class MovingState:
         return self._before_entering
 
     @property
-    def after_exiting(self) -> Optional[List[Callable[[], None | Any]]]:
+    def after_exiting(self) -> Optional[List[Callable[[], Any]]]:
         """
         Returns the list of functions to be called after exiting the state.
 
@@ -243,7 +270,7 @@ class MovingState:
         *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
         speed_expressions: Optional[FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
         used_context_variables: Optional[List[str]] = None,
-        before_entering: Optional[List[Callable[[], None | Any]]] = None,
+        before_entering: Optional[List[Callable[[], Any]]] = None,
         after_exiting: Optional[List[Callable[[], None] | Any]] = None,
     ) -> None:
         """
@@ -271,8 +298,10 @@ class MovingState:
             case True, False:
                 if used_context_variables is None:
                     raise ValueError(
-                        "No used_context_variables provided, You must provide a names set that contains all the name of the variables used in the speed_expressions."
-                        "If you do not need use context variables, then you should use *speeds argument to create the MovingState."
+                        "No used_context_variables provided, You must provide a names set that contains all the "
+                        "name of the variables used in the speed_expressions."
+                        "If you do not need use context variables, "
+                        "then you should use *speeds argument to create the MovingState."
                     )
                 self._speeds = None
                 match speed_expressions:
@@ -331,8 +360,8 @@ class MovingState:
         if used_context_variables:
             self._validate_used_context_variables(used_context_variables, self._speed_expressions)
         self._used_context_variables: List[str] = used_context_variables or []
-        self._before_entering: List[Callable[[], None | Any]] = before_entering or []
-        self._after_exiting: List[Callable[[], None | Any]] = after_exiting or []
+        self._before_entering: List[Callable[[], Any]] = before_entering or []
+        self._after_exiting: List[Callable[[], Any]] = after_exiting or []
         self._identifier: int = MovingState.__state_id_counter__
         MovingState.__state_id_counter__ += 1
 
@@ -1630,9 +1659,9 @@ class Botix:
     @classmethod
     def export_structure(
         cls,
-        save_path: str,
+        save_path: str | Path,
         transitions: TokenPool,
-        arrow_style: ArrowStyle | Literal["up", "down", "left", "right"] | str = "down",
+        arrow_style: ArrowStyle | Literal["up", "down", "left", "right"] = "down",
     ) -> Self:
         """
         Export the structure to a UML file based on the provided transitions.
@@ -1645,50 +1674,38 @@ class Botix:
             Self: The current instance.
         """
         undefined_to_state = "UNDEFINED_TO_STATE"
-        undefined_from_state = "UNDEFINED_FROM_STATE"
-        if isinstance(arrow_style, ArrowStyle):
-            arrow = arrow_style
-        else:
-            upper = arrow_style.upper()
-            matched = list(filter(lambda x: x.name == upper, ArrowStyle))
-            if matched:
-                arrow = matched[0]
-            else:
-                raise ValueError(f"Must be one of {list(ArrowStyle)}, but got unknown arrow style: {arrow_style}")
-
+        undefined_from_state_alias = "UNDEFINED_FROM_STATE"
+        arrow = ArrowStyle.new(arrow_style)
         start_string = "@startuml\n"
         end_string = "@enduml\n"
 
-        states_alias_mapping: Dict[MovingState, str] = {}  # type: ignore
+        states_alias_mapping: Dict[MovingState, str] = {
+            (undefined_from_state := MovingState.halt()): undefined_from_state_alias
+        }
         state_name_gen: NameGenerator = NameGenerator(basename="state_")
         all_states: Set[MovingState] = set(
             chain(*[transition.from_states + list(transition.to_states.values()) for transition in transitions])
         )
         lines: List[str] = []
-        if no_from := list(filter(lambda x: not x.from_states, transitions)):
 
-            states_alias_mapping[undefined_from_state] = undefined_from_state  # type: ignore
-            for t in no_from:
-                t: MovingTransition
-                t.from_states.append(undefined_from_state)  # type: ignore
         for state in all_states:
             cls._inject_state_meta_info(lines, state, state_name_gen, states_alias_mapping)
 
         break_gen: NameGenerator = NameGenerator(basename="break_")
         for transition in transitions:
 
-            for from_state in transition.from_states:
+            from_states_iter = transition.from_states if transition.from_states else [undefined_from_state]
+
+            for from_state in from_states_iter:
+
+                from_state_alias: str = states_alias_mapping.get(from_state)
 
                 match len(transition.to_states):
                     case 0:
-                        lines.append(f"{states_alias_mapping.get(from_state)} {arrow} {undefined_to_state}\n")
-                        lines.append(f"note on link\nThis transition does not define a to_states\nend note\n")
+                        lines.append(f"{from_state_alias} {arrow} {undefined_to_state}\n")
                     case 1:
                         to_state = list(transition.to_states.values())[0]
-
-                        lines.append(
-                            f"{states_alias_mapping.get(from_state)} {arrow} {states_alias_mapping.get(to_state)}\n"
-                        )
+                        lines.append(f"{from_state_alias} {arrow} {states_alias_mapping.get(to_state)}\n")
                     case _:
                         if not callable(transition.breaker):
                             raise ValueError(
@@ -1700,24 +1717,20 @@ class Botix:
                         lines.insert(
                             1, f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n"
                         )
-                        lines.append(f"{states_alias_mapping.get(from_state)} {arrow} {break_node_name}\n")
-                        for case_name, to_state in transition.to_states.items():
+                        lines.append(f"{from_state_alias} {arrow} {break_node_name}\n")
 
+                        for case_name, to_state in transition.to_states.items():
                             lines.append(
                                 f"{break_node_name} {arrow} {states_alias_mapping.get(to_state)}: {case_name}\n"
                             )
 
-        if no_from:
-            for t in no_from:
-                t: MovingTransition
-                t.from_states.remove(undefined_from_state)  # type: ignore
         start_states: Set[MovingState] = Botix.acquire_start_states(token_pool=transitions)
         end_states: Set[MovingState] = Botix.acquire_end_states(token_pool=transitions)
 
         start_heads: List[str] = [f"[*] {arrow} {states_alias_mapping.get(sta)}\n" for sta in start_states]
         end_heads: List[str] = [f"{states_alias_mapping.get(sta)} {arrow} [*]\n" for sta in end_states]
 
-        with open(save_path, "w") as f:
+        with open(Path(save_path), "w") as f:
 
             f.writelines([start_string, *lines, "\n", *start_heads, "\n", *end_heads, "\n", end_string])
         return cls
