@@ -807,6 +807,8 @@ class MovingState:
 
                 getter_function_name_generator = NameGenerator(f"state{self._identifier}_context_getter_")
                 getter_temp_name_generator = NameGenerator(f"state{self._identifier}_context_getter_temp_")
+
+                # this is to avoid re-calc in Full pattern and LR pattern
                 expression_final_value_temp = NameGenerator(f"state{self._identifier}_val_tmp")
 
                 match self._pattern_type:
@@ -856,30 +858,38 @@ class MovingState:
         getter_temp_name_generator: NameGenerator,
     ) -> str:
         """
+        Generates a parameter string for a single expression pattern.
 
         Args:
-            con:
-            context:
-            expression:
-            getter_function_name_generator:
-            getter_temp_name_generator:
+            con: An instance of CloseLoopController used to register context getters.
+            context: An instance of Context used to store generated context getter functions.
+            expression: An instance of IndividualExpressionPattern representing a single expression pattern.
+            getter_function_name_generator: An instance of NameGenerator used to generate names for context getter functions.
+            getter_temp_name_generator: An instance of NameGenerator used to generate temporary variable names.
 
         Returns:
-
+            str: A generated parameter string where variables in the expression are replaced with calls to corresponding context getter functions.
         """
+        # Initialize the argument string by converting the expression to a tuple's string representation and removing quotes.
         input_arg_string: str = str(tuple(expression)).replace("'", "")
+        # Iterate over the context variables used to generate the expressions.
         for varname in self._used_context_variables:
 
-            # Create context retrieval functions using expressions
+            # Register a context getter that takes the variable name and returns a callable object.
             fn: Callable[[], Any] = con.register_context_getter(varname)
+            # Store this getter function in the context using the generated function name.
             context[(getter_func_var_name := getter_function_name_generator())] = fn
+            # Generate a temporary variable name for referencing context values in the argument string.
             temp_name = getter_temp_name_generator()
 
+            # If the variable name appears only once in the argument string, replace it directly with a function call.
             if input_arg_string.count(varname) == 1:
                 input_arg_string = input_arg_string.replace(varname, f"{getter_func_var_name}()", 1)
             else:
+                # If the variable name appears multiple times, replace the first occurrence with an assignment-based function call, and subsequent occurrences with the temporary variable name.
                 input_arg_string = input_arg_string.replace(varname, f"({temp_name}:={getter_func_var_name}())", 1)
                 input_arg_string = input_arg_string.replace(varname, temp_name)
+        # Return the final generated argument string.
         return input_arg_string
 
     def _make_arg_string_lr_pattern(
@@ -891,22 +901,43 @@ class MovingState:
         getter_function_name_generator: NameGenerator,
         getter_temp_name_generator: NameGenerator,
     ) -> str:
+        """
+        Constructs a parameter string for left and right expressions.
+
+        Args:
+            con: An instance of the closed-loop controller to register context getters.
+            context: The context environment to store generated getter functions.
+            expression: An expression pattern containing two expressions (left and right).
+            expression_final_value_temp: A generator for creating temporary variable names for final expression values.
+            getter_function_name_generator: A generator for creating names for context getter functions.
+            getter_temp_name_generator: A generator for creating temporary variable names for context getter functions.
+
+        Returns:
+            A constructed parameter string for further operations.
+
+        Raises:
+            TokenizeError: If both parts of the expression are integers, an exception is raised.
+            RuntimeError: If an unexpected situation occurs, an exception is raised.
+        """
+        # Generate temporary variable names for storing the final value of the expressions
         l_val_temp_name: str = expression_final_value_temp()
         r_val_temp_name: str = expression_final_value_temp()
+        # Build a combined string of left and right expressions
         lr_expression: str = f"{expression[0]}{__MAGIC_SPLIT_CHAR__}{expression[-1]}"
+        # Iterate over used context variables, create context getter functions, and replace variables in expressions
         for varname in self._used_context_variables:
-            # Create context retrieval functions using expressions
             fn: Callable[[], Any] = con.register_context_getter(varname)
             context[getter_func_var_name := getter_function_name_generator()] = fn
             lr_expression = self._replace_var(
                 lr_expression, varname, getter_func_var_name, getter_temp_name_generator()
             )
+        # Split the left and right expressions
         left_expression, right_expression = lr_expression.split(__MAGIC_SPLIT_CHAR__)
+        # Based on the types of the left and right expressions, construct different parameter strings
         match isinstance(expression[0], int), isinstance(expression[-1], int):
             case True, True:
                 raise TokenizeError(f"Should never be here!")
             case False, False:
-
                 input_arg_string = f"({l_val_temp_name}:=({left_expression}),{l_val_temp_name},{r_val_temp_name}:=({right_expression}),{r_val_temp_name})"
             case False, True:
                 input_arg_string = (
@@ -929,15 +960,37 @@ class MovingState:
         getter_function_name_generator: NameGenerator,
         getter_temp_name_generator: NameGenerator,
     ) -> str:
+        """
+        Constructs a full argument string pattern.
+
+        Args:
+            con: An instance of CloseLoopController used to get context variables.
+            context: A dictionary storing context variables and getter functions.
+            expression: A tuple containing parts of the expression to build the final expression.
+            expression_final_value_temp: A generator for creating temporary variable names for the final value of the expression.
+            getter_function_name_generator: A generator for creating names for context getter functions.
+            getter_temp_name_generator: A generator for creating temporary variable names for getter function calls.
+
+        Returns:
+            The constructed argument string pattern.
+        """
+        # Generate a temporary variable name for storing the final value of the expression
         val_temp_name: str = expression_final_value_temp()
+        # Initialize the full expression with the first element of the tuple
         full_expression = expression[0]
+
+        # Iterate over all used context variables, create a getter function for each, and replace variable names in the expression
         for varname in self._used_context_variables:
-            # Create context retrieval functions using expressions
+            # Create a context getter function using an expression
             fn: Callable[[], Any] = con.register_context_getter(varname)
+            # Generate a name for the getter function and store it in the context
             context[getter_func_var_name := getter_function_name_generator()] = fn
+            # Replace variable names in the expression with getter function calls
             full_expression = self._replace_var(
                 full_expression, varname, getter_func_var_name, getter_temp_name_generator()
             )
+
+        # Construct the final argument string pattern
         input_arg_string = f"({val_temp_name}:=({full_expression}),{val_temp_name},{val_temp_name},{val_temp_name})"
         return input_arg_string
 
