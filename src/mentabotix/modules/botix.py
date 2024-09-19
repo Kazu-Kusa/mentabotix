@@ -223,7 +223,13 @@ class MovingState:
         Returns:
             int: The state identifier.
         """
-        return self._identifier
+        return self._state_id
+
+    @property
+    def label(self) -> str:
+        """unique label"""
+        
+        return f'{self._state_id}_MovingState'
 
     @property
     def before_entering(self) -> Optional[List[Callable[[], Any]]]:
@@ -266,12 +272,13 @@ class MovingState:
         return self._speed_expressions
 
     def __init__(
-        self,
-        *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
-        speed_expressions: Optional[FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
-        used_context_variables: Optional[List[str]] = None,
-        before_entering: Optional[List[Callable[[], Any]]] = None,
-        after_exiting: Optional[List[Callable[[], None] | Any]] = None,
+            self,
+            *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
+            speed_expressions: Optional[
+                FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
+            used_context_variables: Optional[List[str]] = None,
+            before_entering: Optional[List[Callable[[], Any]]] = None,
+            after_exiting: Optional[List[Callable[[], None] | Any]] = None,
     ) -> None:
         """
         Initialize the MovingState with speeds.
@@ -331,7 +338,7 @@ class MovingState:
             case False, True:
                 self._speed_expressions = None
                 match speeds:
-                    case (int(full_speed),):
+                    case (int(full_speed), ):
                         self._pattern_type = PatternType.Full
                         self._speeds = full((4,), full_speed)
                     case (int(left_speed), int(right_speed)):
@@ -362,12 +369,12 @@ class MovingState:
         self._used_context_variables: List[str] = used_context_variables or []
         self._before_entering: List[Callable[[], Any]] = before_entering or []
         self._after_exiting: List[Callable[[], Any]] = after_exiting or []
-        self._identifier: int = MovingState.__state_id_counter__
+        self._state_id: int = MovingState.__state_id_counter__
         MovingState.__state_id_counter__ += 1
 
     @staticmethod
     def _validate_used_context_variables(
-        used_context_variables: List[str], speed_expressions: IndividualExpressionPattern
+            used_context_variables: List[str], speed_expressions: IndividualExpressionPattern
     ) -> None:
         if len(used_context_variables) != len(set(used_context_variables)):
             raise ValueError(f"used_context_variables can't contain duplicated item!")
@@ -378,11 +385,11 @@ class MovingState:
 
     @classmethod
     def rand_move(
-        cls,
-        con: CloseLoopController,
-        speeds: Sequence[Tuple[int, int, int, int]],
-        weights: Optional[Sequence[float | int]] = None,
-        used_ctx_varname: str = "rand_move",
+            cls,
+            con: CloseLoopController,
+            speeds: Sequence[Tuple[int, int, int, int]],
+            weights: Optional[Sequence[float | int]] = None,
+            used_ctx_varname: str = "rand_move",
     ) -> Self:
         """
         Registers a random movement behavior with the given CloseLoopController.
@@ -448,11 +455,11 @@ class MovingState:
 
     @classmethod
     def rand_spd_straight(
-        cls,
-        con: CloseLoopController,
-        speeds: Sequence[int],
-        weights: Optional[Sequence[float | int]] = None,
-        used_ctx_varname: str = "rand_speed",
+            cls,
+            con: CloseLoopController,
+            speeds: Sequence[int],
+            weights: Optional[Sequence[float | int]] = None,
+            used_ctx_varname: str = "rand_speed",
     ) -> Self:
         """
         Create a new instance of the class with a random speed.
@@ -539,11 +546,11 @@ class MovingState:
 
     @classmethod
     def rand_dir_turn(
-        cls,
-        con: CloseLoopController,
-        turn_speed: int,
-        turn_left_prob: float = 0.5,
-        used_ctx_varname: str = "rand_direction",
+            cls,
+            con: CloseLoopController,
+            turn_speed: int,
+            turn_left_prob: float = 0.5,
+            used_ctx_varname: str = "rand_direction",
     ) -> Self:
         """
         Adds a method for random turning to the CloseLoopController class.
@@ -587,12 +594,12 @@ class MovingState:
 
     @classmethod
     def rand_spd_turn(
-        cls,
-        con: CloseLoopController,
-        direction: Literal["l", "r"],
-        turn_speeds: Sequence[int],
-        weights: Optional[Sequence[float | int]] = None,
-        used_ctx_varname: str = "rand_speed",
+            cls,
+            con: CloseLoopController,
+            direction: Literal["l", "r"],
+            turn_speeds: Sequence[int],
+            weights: Optional[Sequence[float | int]] = None,
+            used_ctx_varname: str = "rand_speed",
     ) -> Self:
         """
         Generates a random turning behavior for a CloseLoopController.
@@ -639,11 +646,11 @@ class MovingState:
 
     @classmethod
     def rand_dir_spd_turn(
-        cls,
-        con: CloseLoopController,
-        turn_speeds: Sequence[int],
-        weights: Optional[Sequence[float | int]] = None,
-        used_ctx_varname: str = "rand_dir_speed",
+            cls,
+            con: CloseLoopController,
+            turn_speeds: Sequence[int],
+            weights: Optional[Sequence[float | int]] = None,
+            used_ctx_varname: str = "rand_dir_speed",
     ) -> Self:
         """
         Generates an instance of CloseLoopController that randomly selects a turning speed before entering the behavior.
@@ -780,7 +787,7 @@ class MovingState:
             raise TokenizeError(f"Cannot tokenize a state with no speed expressions and no speeds.")
 
         context: Context = {}  # Initialize the context dictionary
-        context_updater_func_name_generator: NameGenerator = NameGenerator(f"state{self._identifier}_context_updater_")
+        context_updater_func_name_generator: NameGenerator = NameGenerator(f"state{self._state_id}_context_updater_")
 
         # Generate tokens for actions before entering the state
         before_enter_tokens: List[str] = []
@@ -805,11 +812,11 @@ class MovingState:
                         f"You must parse a CloseLoopController to tokenize a state with expression pattern"
                     )
 
-                getter_function_name_generator = NameGenerator(f"state{self._identifier}_context_getter_")
-                getter_temp_name_generator = NameGenerator(f"state{self._identifier}_context_getter_temp_")
+                getter_function_name_generator = NameGenerator(f"state{self._state_id}_context_getter_")
+                getter_temp_name_generator = NameGenerator(f"state{self._state_id}_context_getter_temp_")
 
                 # this is to avoid re-calc in Full pattern and LR pattern
-                expression_final_value_temp = NameGenerator(f"state{self._identifier}_val_tmp")
+                expression_final_value_temp = NameGenerator(f"state{self._state_id}_val_tmp")
 
                 match self._pattern_type:
                     case PatternType.Full:
@@ -850,12 +857,12 @@ class MovingState:
         return tokens, context
 
     def _make_arg_string_single_pattern(
-        self,
-        con: CloseLoopController,
-        context: Context,
-        expression: IndividualExpressionPattern,
-        getter_function_name_generator: NameGenerator,
-        getter_temp_name_generator: NameGenerator,
+            self,
+            con: CloseLoopController,
+            context: Context,
+            expression: IndividualExpressionPattern,
+            getter_function_name_generator: NameGenerator,
+            getter_temp_name_generator: NameGenerator,
     ) -> str:
         """
         Generates a parameter string for a single expression pattern.
@@ -893,13 +900,13 @@ class MovingState:
         return input_arg_string
 
     def _make_arg_string_lr_pattern(
-        self,
-        con: CloseLoopController,
-        context: Context,
-        expression: IndividualExpressionPattern,
-        expression_final_value_temp: NameGenerator,
-        getter_function_name_generator: NameGenerator,
-        getter_temp_name_generator: NameGenerator,
+            self,
+            con: CloseLoopController,
+            context: Context,
+            expression: IndividualExpressionPattern,
+            expression_final_value_temp: NameGenerator,
+            getter_function_name_generator: NameGenerator,
+            getter_temp_name_generator: NameGenerator,
     ) -> str:
         """
         Constructs a parameter string for left and right expressions.
@@ -952,13 +959,13 @@ class MovingState:
         return input_arg_string
 
     def _make_arg_string_full_pattern(
-        self,
-        con: CloseLoopController,
-        context: Context,
-        expression: Tuple[str, str, str, str],
-        expression_final_value_temp: NameGenerator,
-        getter_function_name_generator: NameGenerator,
-        getter_temp_name_generator: NameGenerator,
+            self,
+            con: CloseLoopController,
+            context: Context,
+            expression: Tuple[str, str, str, str],
+            expression_final_value_temp: NameGenerator,
+            getter_function_name_generator: NameGenerator,
+            getter_temp_name_generator: NameGenerator,
     ) -> str:
         """
         Constructs a full argument string pattern.
@@ -1002,7 +1009,7 @@ class MovingState:
             return source.replace(var_name, f"({temp_name}:={func_name}())", 1).replace(var_name, temp_name)
 
     def __hash__(self) -> int:
-        return self._identifier
+        return self._state_id
 
     def __eq__(self, other: Self) -> bool:
         if self._speeds is None or other._speeds is None:
@@ -1018,10 +1025,10 @@ class MovingState:
     def __str__(self):
         main_seq = self._speed_expressions if self._speeds is None else self.unwrap()
         if all(main_seq[0] == x for x in main_seq[1:]):
-            return f"{self._identifier}-MovingState({repr(main_seq[0])})"
+            return f"{self._state_id}-MovingState({repr(main_seq[0])})"
         if main_seq[0] == main_seq[1] != main_seq[-1] == main_seq[-2]:
-            return f"{self._identifier}-MovingState{main_seq[1:3]}"
-        return f"{self._identifier}-MovingState{main_seq}"
+            return f"{self._state_id}-MovingState{main_seq[1:3]}"
+        return f"{self._state_id}-MovingState{main_seq}"
 
     def __repr__(self):
         return str(self)
@@ -1037,17 +1044,22 @@ class MovingTransition:
     __transition_id_counter__: ClassVar[int] = 0
 
     @property
-    def identifier(self) -> int:
+    def transition_id(self) -> int:
         """The unique identifier of the transition."""
         return self._transition_id
 
+    @property
+    def label(self) -> str:
+        """unique label"""
+        return f'{self._transition_id}_MovingTransition'
+
     def __init__(
-        self,
-        duration: float,
-        breaker: Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]] = None,
-        check_interval: Optional[float] = 0.01,
-        from_states: Optional[Sequence[MovingState] | MovingState] = None,
-        to_states: Optional[Dict[KT, MovingState] | MovingState] = None,
+            self,
+            duration: float,
+            breaker: Optional[Callable[[], KT] | Callable[[], bool] | Callable[[], Any]] = None,
+            check_interval: Optional[float] = 0.01,
+            from_states: Optional[Sequence[MovingState] | MovingState] = None,
+            to_states: Optional[Dict[KT, MovingState] | MovingState] = None,
     ):
         """
         Initialize a MovingTransition object.
@@ -1171,11 +1183,11 @@ class MovingTransition:
 
     def __eq__(self, other):
         return (
-            self.duration == other.duration
-            and self.breaker == other.breaker
-            and self.check_interval == other.check_interval
-            and self.from_states == other.from_states
-            and self.to_states == other.to_states
+                self.duration == other.duration
+                and self.breaker == other.breaker
+                and self.check_interval == other.check_interval
+                and self.from_states == other.from_states
+                and self.to_states == other.to_states
         )
 
     def __str__(self):
@@ -1480,7 +1492,7 @@ class Botix:
                         state_hash = hash(next_state)
                         if any(state_hash == hash(state) for state in chain):
                             # Loop detected, appending the loop path to the loops list
-                            loops.append(chain[chain.index(next_state) :])
+                            loops.append(chain[chain.index(next_state):])
                             rolling_back = True
                             search_queue.put(chain.pop())
                             continue
@@ -1522,7 +1534,7 @@ class Botix:
                 return True
 
     def acquire_connected_forward_transition(
-        self, state: MovingState, none_check: bool = True
+            self, state: MovingState, none_check: bool = True
     ) -> MovingTransition | None:
         """
         Returns the MovingTransition object that is connected to the given MovingState object in the token pool.
@@ -1554,7 +1566,7 @@ class Botix:
                 )
 
     def acquire_connected_backward_transition(
-        self, state: MovingState, none_check: bool = True
+            self, state: MovingState, none_check: bool = True
     ) -> MovingTransition | List[MovingTransition] | None:
         """
         Returns the MovingTransition object or a list of MovingTransition objects that are connected to the given MovingState object in the token pool.
@@ -1682,9 +1694,9 @@ class Botix:
 
     @staticmethod
     def _compile_branchless_chain(
-        states: List[MovingState],
-        transitions: List[MovingTransition],
-        controller: Optional[CloseLoopController] = None,
+            states: List[MovingState],
+            transitions: List[MovingTransition],
+            controller: Optional[CloseLoopController] = None,
     ) -> Tuple[List[str], Context]:
         """
         Retrieves information from states and transitions to compile a branchless chain.
@@ -1755,7 +1767,7 @@ class Botix:
         # Check if the last state in the branchless chain has a connected forward transition
         match max_branchless_chain:
             case ([*_, last_state], _) if connected_forward_transition := self.acquire_connected_forward_transition(
-                last_state, none_check=False
+                    last_state, none_check=False
             ):
 
                 branch_transition, branch_context = connected_forward_transition.tokenize()
@@ -1775,10 +1787,10 @@ class Botix:
 
     @classmethod
     def export_structure(
-        cls,
-        save_path: str | Path,
-        transitions: TokenPool,
-        arrow_style: ArrowStyle | Literal["up", "down", "left", "right"] = "down",
+            cls,
+            save_path: str | Path,
+            transitions: TokenPool,
+            arrow_style: ArrowStyle | Literal["up", "down", "left", "right"] = "down",
     ) -> Self:
         """
         Export the structure to a UML file based on the provided transitions.
@@ -1791,79 +1803,63 @@ class Botix:
             Self: The current instance.
         """
         undefined_to_state = "UNDEFINED_TO_STATE"
-        undefined_from_state_alias = "UNDEFINED_FROM_STATE"
-        arrow = ArrowStyle.new(arrow_style)
-        start_string = "@startuml\n"
-        end_string = "@enduml\n"
+        undefined_from_state = "UNDEFINED_FROM_STATE"
+        long_seperator = "\n" + repr("#" * 80) + "\n\n"
 
-        states_alias_mapping: Dict[MovingState, str] = {
-            (undefined_from_state := MovingState.halt()): undefined_from_state_alias
-        }
-        state_name_gen: NameGenerator = NameGenerator(basename="state_")
+        arrow = ArrowStyle.new(arrow_style)
+
         all_states: Set[MovingState] = set(
             chain(*[transition.from_states + list(transition.to_states.values()) for transition in transitions])
         )
-        lines: List[str] = []
+        trunk: List[str] = list(chain(*[cls._generate_state_meta_info(state) for state in all_states]))
+        trunk.append(long_seperator)
 
-        for state in all_states:
-            cls._inject_state_meta_info(lines, state, state_name_gen, states_alias_mapping)
-
-        break_gen: NameGenerator = NameGenerator(basename="break_")
         for transition in transitions:
 
-            from_states_iter = transition.from_states if transition.from_states else [undefined_from_state]
-
-            for from_state in from_states_iter:
-
-                from_state_alias: str = states_alias_mapping.get(from_state)
+            for from_state in list(map(lambda sta: sta.label, transition.from_states)) or [undefined_from_state]:
 
                 match len(transition.to_states):
                     case 0:
-                        lines.append(f"{from_state_alias} {arrow} {undefined_to_state}\n")
+                        trunk.append(f"{from_state} {arrow} {undefined_to_state}\n")
                     case 1:
                         to_state = list(transition.to_states.values())[0]
-                        lines.append(f"{from_state_alias} {arrow} {states_alias_mapping.get(to_state)}\n")
+                        trunk.append(f"{from_state} {arrow} {to_state.label}\n")
                     case _:
                         if not callable(transition.breaker):
                             raise ValueError(
                                 "The break function must be callable. Since branch must need a valid breaker."
                             )
-                        break_node_name: str = break_gen()
+                        break_node_name = f'{transition.label}_break'
+                        trunk.extend(
+                            [f"state {break_node_name} <<choice>>\n",
+                             f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n",
+                             f"{from_state} {arrow} {break_node_name}\n", ] +
+                            [f"\t{break_node_name} {arrow} {to_state.label}: {case_name}\n"
+                             for case_name, to_state in transition.to_states.items()])
+        trunk.append(long_seperator)
 
-                        lines.insert(0, f"state {break_node_name} <<choice>>\n")
-                        lines.insert(
-                            1, f"note right of {break_node_name}: {get_function_annotations(transition.breaker)}\n"
-                        )
-                        lines.append(f"{from_state_alias} {arrow} {break_node_name}\n")
-
-                        for case_name, to_state in transition.to_states.items():
-                            lines.append(
-                                f"{break_node_name} {arrow} {states_alias_mapping.get(to_state)}: {case_name}\n"
-                            )
-
-        start_states: Set[MovingState] = Botix.acquire_start_states(token_pool=transitions)
-        end_states: Set[MovingState] = Botix.acquire_end_states(token_pool=transitions)
-
-        start_heads: List[str] = [f"[*] {arrow} {states_alias_mapping.get(sta)}\n" for sta in start_states]
-        end_heads: List[str] = [f"{states_alias_mapping.get(sta)} {arrow} [*]\n" for sta in end_states]
-
-        with open(Path(save_path), "w") as f:
-
-            f.writelines([start_string, *lines, "\n", *start_heads, "\n", *end_heads, "\n", end_string])
+        cls._compose(arrow, trunk, save_path, transitions)
         return cls
 
     @classmethod
-    def _inject_state_meta_info(
-        cls,
-        lines: List[str],
-        state: MovingState,
-        state_name_gen: NameGenerator,
-        states_alias_mapping: Dict[MovingState, str],
-    ):
-        states_alias_mapping[state] = (state_alias := state_name_gen())
-        state_name = f"{state.state_id}-MovingState"
-        lines.insert(0, f'state "{state_name}" as {state_alias}\n')
-        state_cmds_expr = bold((string := str(state))[string.index("(") :])
+    def _compose(cls, arrow: ArrowStyle, trunk: List[str], save_path: str, transitions: TokenPool):
+        start_heads: List[str] = [f"[*] {arrow} {sta.label}\n" for sta in
+                                  (Botix.acquire_start_states(token_pool=transitions))]
+        end_heads: List[str] = [f"{sta.label} {arrow} [*]\n" for sta in
+                                (Botix.acquire_end_states(token_pool=transitions))]
+        start_string = "@startuml\n"
+        end_string = "@enduml\n"
+        with open(Path(save_path), "w") as f:
+            f.writelines([start_string, *trunk, "\n", *start_heads, "\n", *end_heads, "\n", end_string])
+
+    @classmethod
+    def _generate_state_meta_info(
+            cls,
+            state: MovingState,
+    ) -> List[str]:
+        info_lines: List[str] = [f'state {state.label}\n']
+
+        state_cmds_expr = bold((string := str(state))[string.index("("):])
         before_entering_desc = (
             f"{bold('Before:')}\\n"
             + "\\n".join(f"##{get_function_annotations(fun)}" for fun in state.before_entering)
@@ -1882,10 +1878,11 @@ class Botix:
             description = f"{state_cmds_expr}\\n====\\n{before_entering_desc}{after_entering_desc}"
         else:
             description = state_cmds_expr
-        lines.insert(1, f"{state_alias}: {description}\n")
+        info_lines.append(f'{state.label}: {description}\n')
+        return info_lines
 
     def compile(
-        self, return_median: bool = False, function_name: str = "_botix_func"
+            self, return_median: bool = False, function_name: str = "_botix_func"
     ) -> Callable[[], None] | Tuple[List[str], Context]:
         """
         Compiles the bot's code and returns a callable function or a tuple of compiled lines and context.

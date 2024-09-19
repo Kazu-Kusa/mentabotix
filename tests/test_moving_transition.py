@@ -107,7 +107,7 @@ class TestMovingTransition(unittest.TestCase):
     def test_identifier(self):
         transition1 = MovingTransition(self.default_duration, None, None, None, None)
         transition2 = MovingTransition(self.default_duration, None, None, None, None)
-        self.assertNotEqual(transition1.identifier, transition2.identifier)
+        self.assertNotEqual(transition1.transition_id, transition2.transition_id)
 
     def test_str(self):
         MovingState.__state_id_counter__ = 0
