@@ -228,7 +228,7 @@ class MovingState:
     @property
     def label(self) -> str:
         """unique label"""
-        
+
         return f'{self._state_id}_MovingState'
 
     @property
@@ -1838,11 +1838,11 @@ class Botix:
                              for case_name, to_state in transition.to_states.items()])
         trunk.append(long_seperator)
 
-        cls._compose(arrow, trunk, save_path, transitions)
+        cls._compose(trunk, transitions, save_path, arrow)
         return cls
 
     @classmethod
-    def _compose(cls, arrow: ArrowStyle, trunk: List[str], save_path: str, transitions: TokenPool):
+    def _compose(cls, trunk: List[str], transitions: TokenPool, save_path: str, arrow: ArrowStyle):
         start_heads: List[str] = [f"[*] {arrow} {sta.label}\n" for sta in
                                   (Botix.acquire_start_states(token_pool=transitions))]
         end_heads: List[str] = [f"{sta.label} {arrow} [*]\n" for sta in
@@ -1857,7 +1857,6 @@ class Botix:
             cls,
             state: MovingState,
     ) -> List[str]:
-        info_lines: List[str] = [f'state {state.label}\n']
 
         state_cmds_expr = bold((string := str(state))[string.index("("):])
         before_entering_desc = (
@@ -1878,7 +1877,7 @@ class Botix:
             description = f"{state_cmds_expr}\\n====\\n{before_entering_desc}{after_entering_desc}"
         else:
             description = state_cmds_expr
-        info_lines.append(f'{state.label}: {description}\n')
+        info_lines: List[str] = [f'state {state.label}: {description}\n']
         return info_lines
 
     def compile(
@@ -1958,21 +1957,3 @@ class Botix:
         return SingleTable(table_data).table
 
 
-if __name__ == "__main__":
-    # Good Cases
-    full = MovingState(2800)
-    lr = MovingState(4000, -4000)
-    individual = MovingState(0, 5000, 5000, 5000)
-
-    print(f"full: {full.unwrap()}\nlr: {lr.unwrap()}\nindividual: {individual.unwrap()}")
-
-    stra = MovingState.straight(3000)
-    dif = MovingState.differential("l", 60, 5000)
-    tur = MovingState.turn("l", 5000)
-    dri = MovingState.drift("fl", 5000)
-
-    print(f"stra: {stra.unwrap()}\ndif: {dif.unwrap()}\ntur: {tur.unwrap()}\ndri: {dri.unwrap()}")
-
-    # Bad Cases
-    # g=MovingState(10,10,10,10,10)
-    # g = MovingState("1")
