@@ -65,6 +65,9 @@ class SamplerUsage(NamedTuple):
 
 
 class Menta:
+    """
+    A unified sensor data updater constructor.
+    """
     # reserved to check the return type of the sampler
     __supported__ = (SupportsInt, SupportsFloat)
 
@@ -284,7 +287,7 @@ class Menta:
         return func_obj
 
     @staticmethod
-    def _index_for_seq_sampler_data(data_var_name: str, required: List[int] | int) -> List[str]:
+    def _index_for_seq_sampler_data(data_var_name: str, required: Sequence[int] | int) -> List[str]:
         """
         A function that generates a list of indexed expressions based on the given data variable name and a list of required indexes.
 
@@ -298,7 +301,7 @@ class Menta:
         match required:
             case int(required_seq_length):
                 final_required_data_indexes = range(required_seq_length)
-            case list(required_data_indexes):
+            case list(required_data_indexes)| tuple(required_data_indexes):
                 final_required_data_indexes = required_data_indexes
             case _:
                 raise RequirementError(
@@ -307,7 +310,7 @@ class Menta:
         return [f"{data_var_name}[{i}]" for i in final_required_data_indexes]
 
     @staticmethod
-    def _index_for_drc_sampler_data(data_var_name: str, required: List[int] | int) -> List[str]:
+    def _index_for_drc_sampler_data(data_var_name: str, required: Sequence[int] | int) -> List[str]:
         """
         A function that generates a list of indexed expressions based on the given data variable name and a list of required indexes.
 
@@ -323,7 +326,8 @@ class Menta:
                 raise RequirementError("Can't resolve the empty Usage List")
             case int(required_seq_length):
                 final_required_data_indexes = range(required_seq_length)
-            case list(required_data_indexes):
+            case list(required_data_indexes)| tuple(required_data_indexes):
+
                 final_required_data_indexes = required_data_indexes
             case _:
                 raise RequirementError(
@@ -332,7 +336,7 @@ class Menta:
         return [f"(({data_var_name}>>{i})&1)" for i in final_required_data_indexes]
 
     @staticmethod
-    def _index_for_idx_sampler_data(func_var_name: str, required: List[int]) -> List[str]:
+    def _index_for_idx_sampler_data(func_var_name: str, required: Sequence[int]) -> List[str]:
         """
         Generate a list of indexed expressions based on the given function variable name and a list of required indexes.
 
