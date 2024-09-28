@@ -391,7 +391,7 @@ def straight_chain(
     interval: float = 0.07,
     breaker: Optional[Callable[[], bool]] = None,
     lead_time: float = 0.05,
-    state_on_break: Optional[MovingState] = MovingState(0),
+    state_on_break: Optional[MovingState] = MovingState().halt(),
 ) -> StateTransitionPack:
     """
     A function that calculates the states and transitions for a straight chain based on the input parameters.

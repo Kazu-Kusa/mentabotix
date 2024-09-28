@@ -22,6 +22,7 @@ from typing import (
     ClassVar,
     Set,
     Sequence,
+    Iterable,
     get_type_hints,
 )
 
@@ -273,7 +274,7 @@ class MovingState:
 
     def __init__(
             self,
-            *speeds: Unpack[FullPattern] | Unpack[LRPattern] | Unpack[IndividualPattern],
+            *speeds: Unpack[FullPattern | LRPattern | IndividualPattern],
             speed_expressions: Optional[
                 FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern] = None,
             used_context_variables: Optional[List[str]] = None,
@@ -291,7 +292,7 @@ class MovingState:
                     - IndividualPattern: A tuple of four integers representing individual speeds for each direction.
 
         Keyword Args:
-            speed_expressions (Optional[FullExpressionPattern | Unpack[LRExpressionPattern] | Unpack[IndividualExpressionPattern]]): The speed expressions of the wheels.
+            speed_expressions (Optional[FullExpressionPattern | LRExpressionPattern | IndividualExpressionPattern]): The speed expressions of the wheels.
             used_context_variables (Optional[List[str]]): The set of context variable names used in the speed expressions.
             before_entering (Optional[List[Callable[[], None|Any]]]): The list of functions to be called before entering the state.
             after_exiting (Optional[List[Callable[[], None|Any]]]]): The list of functions to be called after exiting the state.
@@ -1225,6 +1226,53 @@ class Botix:
     def __init__(self, controller: CloseLoopController, token_pool: Optional[TokenPool] = None):
         self.controller: CloseLoopController = controller
         self.token_pool: TokenPool = token_pool or []
+
+    def remove_token(self,token:MovingTransition)->Self:
+        """
+        Removes a token from the token pool.
+        Args:
+            token(MovingTransition): The token to be removed from the token pool.
+
+        Returns:
+            Self: The current instance of the class.
+
+        """
+        self.token_pool.remove(token)
+        return self
+
+    def append_token(self,token:MovingTransition)->Self:
+        """
+        Appends a token to the token pool.
+        Args:
+            token(MovingTransition): The token to be appended to the token pool.
+
+        Returns:
+            Self: The current instance of the class.
+
+        """
+        self.token_pool.append(token)
+        return self
+    def extend_pool(self, tokens: Iterable[MovingTransition]) -> Self:
+        """
+        Extends the token pool with an iterable of tokens.
+
+        Args:
+            tokens (Iterable[MovingTransition]): An iterable of tokens to be added to the token pool.
+
+        Returns:
+            Self: The current instance of the class.
+        """
+        self.token_pool.extend(tokens)
+        return self
+    def clear_pool(self) -> Self:
+        """
+        Clears all tokens from the token pool.
+
+        Returns:
+            Self: The current instance of the class.
+        """
+        self.token_pool.clear()
+        return self
 
     @staticmethod
     def acquire_unique_start(token_pool: TokenPool, none_check: bool = True) -> MovingState | None:

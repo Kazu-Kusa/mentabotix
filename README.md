@@ -409,9 +409,10 @@ transition_ab = MovingTransition(duration=1, from_states=state_a, to_states=stat
 transition_bc = MovingTransition(duration=2, from_states=state_b, to_states=state_c)
 
 botix = Botix(controller=con)
-botix.token_pool.append(transition_start_a)
-botix.token_pool.append(transition_ab)
-botix.token_pool.append(transition_bc)
+(botix
+ .append_token(transition_start_a)
+ .append_token(transition_ab)
+ .append_token(transition_bc))
 
 # not compile the code into closure, just return the code lines and context, which is human readable.
 compiled_code_lines, variables_context = botix.compile(return_median=True)
@@ -454,9 +455,10 @@ transition_ab = MovingTransition(duration=1, from_states=state_a, to_states=stat
 transition_bc = MovingTransition(duration=2, from_states=state_b, to_states=state_c)
 
 botix = Botix(controller=con)
-botix.token_pool.append(transition_start_a)
-botix.token_pool.append(transition_ab)
-botix.token_pool.append(transition_bc)
+(botix
+ .append_token(transition_start_a)
+ .append_token(transition_ab)
+ .append_token(transition_bc))
 
 # not compile the code into closure, just return the code lines and context, which is human-readable.
 function_closure: Callable[[], None] = botix.compile(return_median=False)
@@ -521,7 +523,7 @@ transition_d_ef = MovingTransition(
     breaker=transition_breaker_fac([0, 1]),
 )
 
-botix.token_pool.extend([transition_a_bcd, transition_d_ef])
+botix.extend_pool([transition_a_bcd, transition_d_ef])
 
 compiled: Tuple[List[str], Dict[str, Any]] = botix.compile(
     return_median=True)  # not compile the code into closure, just return the code lines and context, which is human readable.
